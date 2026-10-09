@@ -1,6 +1,3 @@
-using AuraMusic.Kernel.Protocol;
-using Shouldly;
-
 namespace AuraMusic.Kernel.Tests.Protocol;
 
 public sealed class AuraProtocolTests

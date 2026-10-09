@@ -46,4 +46,11 @@
   <data name="ErrorConnectionLost" xml:space="preserve"><value>Connexion Bluetooth perdue : {0}</value></data>
   <data name="ErrorPairFirst" xml:space="preserve"><value>Appairez d'abord les téléphones dans les réglages Bluetooth.</value></data>
   <data name="SwitchLanguageDescription" xml:space="preserve"><value>Passer en anglais</value></data>
+  <data name="UpdateTitle" xml:space="preserve"><value>Mise à jour disponible</value></data>
+  <data name="UpdateMessage" xml:space="preserve"><value>AuraMusic {0} est disponible. Installer maintenant ?</value></data>
+  <data name="UpdateNow" xml:space="preserve"><value>Mettre à jour</value></data>
+  <data name="UpdateLater" xml:space="preserve"><value>Plus tard</value></data>
+  <data name="UpdateDownloading" xml:space="preserve"><value>&gt; téléchargement {0:P0}</value></data>
+  <data name="UpdateAllowInstall" xml:space="preserve"><value>Autorise AuraMusic à installer des applis, puis relance l'app pour mettre à jour.</value></data>
+  <data name="UpdateFailed" xml:space="preserve"><value>La mise à jour a échoué : {0}</value></data>
 </root>

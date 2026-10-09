@@ -1,6 +1,3 @@
-using System.Collections.Immutable;
-using AuraMusic.Mobile.Resources.Strings;
-
 namespace AuraMusic.Mobile
 {
     public sealed record TutorialStep(string Emoji, string Title, string Text);

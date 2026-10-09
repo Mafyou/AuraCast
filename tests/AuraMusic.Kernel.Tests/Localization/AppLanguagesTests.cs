@@ -1,7 +1,3 @@
-using System.Globalization;
-using AuraMusic.Kernel.Localization;
-using Shouldly;
-
 namespace AuraMusic.Kernel.Tests.Localization;
 
 public sealed class AppLanguagesTests

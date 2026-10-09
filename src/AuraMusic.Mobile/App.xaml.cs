@@ -1,6 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-
-namespace AuraMusic.Mobile
+﻿namespace AuraMusic.Mobile
 {
     public partial class App : Application
     {

@@ -57,11 +57,13 @@
                         Clicked="OnListenClicked" />
             </VerticalStackLayout>
 
-            <Button x:Name="StopButton"
-                    Grid.Row="2"
-                    Text="{x:Static strings:AppStrings.StopButton}"
-                    Style="{StaticResource MatrixButton}"
-                    Clicked="OnStopClicked" />
+            <VerticalStackLayout x:Name="ActivePanel" Grid.Row="2" Spacing="12">
+                <controls:SpectrumView x:Name="Spectrum" HeightRequest="120" />
+
+                <Button Text="{x:Static strings:AppStrings.StopButton}"
+                        Style="{StaticResource MatrixButton}"
+                        Clicked="OnStopClicked" />
+            </VerticalStackLayout>
         </Grid>
 
         <!-- Shown for 2 s at launch: Android 12+ only allows a tiny icon on the system splash. -->

@@ -1,0 +1,12 @@
+global using System.Globalization;
+global using System.Net;
+global using System.Text;
+global using AuraMusic.Kernel.Localization;
+global using AuraMusic.Kernel.Playout;
+global using AuraMusic.Kernel.Protocol;
+global using AuraMusic.Kernel.Spectrum;
+global using AuraMusic.Kernel.State;
+global using AuraMusic.Kernel.Updates;
+global using Moq;
+global using Shouldly;
+global using Xunit;

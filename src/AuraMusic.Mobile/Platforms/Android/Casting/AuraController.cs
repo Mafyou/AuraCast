@@ -1,8 +1,3 @@
-using Android.App;
-using Android.Content;
-using AuraMusic.Kernel.State;
-using AuraMusic.Mobile.Resources.Strings;
-
 namespace AuraMusic.Mobile.Casting;
 
 /// <summary>Entry point for the UI: asks for permissions and starts/stops the streaming services.</summary>

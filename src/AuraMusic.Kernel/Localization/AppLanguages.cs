@@ -1,7 +1,3 @@
-using System.Collections.Frozen;
-using System.Collections.Immutable;
-using System.Globalization;
-
 namespace AuraMusic.Kernel.Localization;
 
 /// <summary>Which language the app speaks: the one the user picked, else the phone's, else French.</summary>

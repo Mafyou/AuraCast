@@ -46,4 +46,11 @@
   <data name="ErrorConnectionLost" xml:space="preserve"><value>Bluetooth connection lost: {0}</value></data>
   <data name="ErrorPairFirst" xml:space="preserve"><value>Pair the phones first in the Bluetooth settings.</value></data>
   <data name="SwitchLanguageDescription" xml:space="preserve"><value>Switch to French</value></data>
+  <data name="UpdateTitle" xml:space="preserve"><value>Update available</value></data>
+  <data name="UpdateMessage" xml:space="preserve"><value>AuraMusic {0} is available. Install it now?</value></data>
+  <data name="UpdateNow" xml:space="preserve"><value>Update</value></data>
+  <data name="UpdateLater" xml:space="preserve"><value>Later</value></data>
+  <data name="UpdateDownloading" xml:space="preserve"><value>&gt; downloading {0:P0}</value></data>
+  <data name="UpdateAllowInstall" xml:space="preserve"><value>Allow AuraMusic to install apps, then restart the app to update.</value></data>
+  <data name="UpdateFailed" xml:space="preserve"><value>The update failed: {0}</value></data>
 </root>

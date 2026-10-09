@@ -3,7 +3,7 @@
 Partage le son d'un téléphone Android avec d'autres téléphones Android, en Bluetooth, sans Wi-Fi ni internet.
 Une alternative maison à LE Audio Auracast pour les téléphones qui ne le supportent pas.
 
-Le téléphone **master** joue sa musique (YouTube Music, Spotify, n'importe quelle app) et les téléphones qui **écoutent** entendent la même chose, avec un léger décalage (un tampon de 100 ms plus la latence Bluetooth).
+Le téléphone **master** joue sa musique (YouTube Music, Spotify, n'importe quelle app) et les téléphones qui **écoutent** entendent la même chose, avec un léger décalage (environ 120 ms de tampon plus la latence Bluetooth).
 
 ## Utilisation
 
@@ -20,7 +20,7 @@ L'écran peut être éteint des deux côtés. La notification permet d'arrêter.
  App musicale ─► AudioPlaybackCapture               Téléphones appairés → connexion RFCOMM
                  PCM 48 kHz stéréo                        │
                       │                                   ▼
-                 Encodeur Opus 128 kbps             Tampon de 100 ms
+                 Encodeur Opus 256 kbps             Tampon d'environ 120 ms
                  (trames de 20 ms)                        │
                       │                                   ▼
                  Serveur RFCOMM  ───── Bluetooth ───►  Décodeur Opus ─► AudioTrack 🎧
@@ -31,7 +31,10 @@ L'écran peut être éteint des deux côtés. La notification permet d'arrêter.
 - **Transport** : Bluetooth Classic RFCOMM sans chiffrement applicatif, trouvé via un enregistrement SDP (`AuraProtocol.ServiceUuid`). Le BLE L2CAP a été essayé en premier mais plafonnait à ~14 kbps sur nos téléphones.
 - **Protocole** : un en-tête `AURA` + version, puis des paquets Opus préfixés par leur longueur (`src/AuraMusic.Kernel/Protocol/AuraProtocol.cs`).
 - **Lecture** : le décodage suit l'horloge de lecture. Un paquet en retard est comblé par la dissimulation de pertes d'Opus et le retard accumulé est rattrapé en sautant une trame.
-- **Plusieurs auditeurs** : chaque connexion a sa propre file d'envoi. En pratique, 3 ou 4 téléphones à 128 kbps (le Bluetooth classique accepte au plus 7 appareils connectés au master).
+- **Lecture** : thread en priorité audio Android, sortie en virgule flottante. Un paquet en retard n'est comblé (dissimulation d'Opus) que si la sortie audio va manquer de son ; un retard accumulé est rattrapé en raccourcissant les trames de 1 ms avec un fondu, sans clic.
+- **Plusieurs auditeurs** : chaque connexion a sa propre file d'envoi. En pratique, 2 ou 3 téléphones à 256 kbps (le Bluetooth classique accepte au plus 7 appareils connectés au master).
+- **Spectre** : pendant la diffusion ou l'écoute, 16 bandes de fréquences façon Matrix (FFT maison dans le Kernel).
+- **Mises à jour** : au lancement, l'app compare sa version à la dernière release GitHub et propose d'installer la nouvelle (même clé de signature : installation par-dessus, réglages conservés).
 
 ## Développement
 
@@ -39,9 +42,13 @@ L'écran peut être éteint des deux côtés. La notification permet d'arrêter.
 - `src/AuraMusic.Kernel` : la logique sans dépendance Android, testable.
   - `State/` : l'état de l'app, une union `AuraState` publiée par `AuraHub` ;
   - `Protocol/` : le format des données échangées ;
-  - `Playout/` : `PlayoutController`, qui décide toutes les 20 ms de jouer, combler, sauter ou rebufferiser (une union `PlayoutStep`).
+  - `Playout/` : `PlayoutController`, qui décide toutes les 20 ms de jouer, rattraper, combler, sauter ou rebufferiser (une union `PlayoutStep`), et `PcmCrossfade` ;
+  - `Spectrum/` : l'analyseur de spectre ;
+  - `Updates/` : lecture de la dernière release GitHub et comparaison des versions (une union `UpdateCheck`) ;
+  - `Localization/` : choix de la langue (FR par défaut, EN).
 - `src/AuraMusic.Mobile` : l'app. Code Android dans `Platforms/Android/Casting/` (`BroadcastService` côté master, `ListenService` côté écoute).
 - `tests/AuraMusic.Kernel.Tests` : tests unitaires xUnit v3 + Shouldly + Moq.
+- Chaque projet regroupe ses `global using` dans un `Usings.cs` à sa racine.
 
 ```sh
 dotnet test --project tests/AuraMusic.Kernel.Tests

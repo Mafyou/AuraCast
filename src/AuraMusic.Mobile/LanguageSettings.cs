@@ -1,6 +1,3 @@
-using System.Globalization;
-using AuraMusic.Kernel.Localization;
-
 namespace AuraMusic.Mobile;
 
 /// <summary>Applies the language the user picked (or the phone's) to every resource lookup.</summary>

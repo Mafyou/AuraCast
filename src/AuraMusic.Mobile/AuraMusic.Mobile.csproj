@@ -57,6 +57,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<PackageReference Include="CommunityToolkit.Maui" Version="15.0.1" />
 		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="11.0.0-rc.1.26425.128" />
 		<PackageReference Include="Concentus" Version="2.2.2" />
@@ -68,10 +69,6 @@
 
 
 	<ItemGroup>
-		<EmbeddedResource Update="Resources\Strings\AppStrings.resx"
-		                  StronglyTypedLanguage="CSharp"
-		                  StronglyTypedNamespace="AuraMusic.Mobile.Resources.Strings"
-		                  StronglyTypedClassName="AppStrings"
-		                  StronglyTypedFileName="$(IntermediateOutputPath)AppStrings.Designer.cs" />
+		<EmbeddedResource Update="Resources\Strings\AppStrings.resx" StronglyTypedLanguage="CSharp" StronglyTypedNamespace="AuraMusic.Mobile.Resources.Strings" StronglyTypedClassName="AppStrings" StronglyTypedFileName="$(IntermediateOutputPath)AppStrings.Designer.cs" />
 	</ItemGroup>
 </Project>

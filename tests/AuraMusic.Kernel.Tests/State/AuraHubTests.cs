@@ -1,6 +1,3 @@
-using AuraMusic.Kernel.State;
-using Shouldly;
-
 namespace AuraMusic.Kernel.Tests.State;
 
 public sealed class AuraHubTests

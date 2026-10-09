@@ -1,22 +1,3 @@
-using System.Diagnostics;
-using System.Globalization;
-using System.Threading.Channels;
-using Android.App;
-using Android.Bluetooth;
-using Android.Content;
-using Android.Content.PM;
-using Android.Media;
-using Android.Media.Projection;
-using Android.OS;
-using Android.Util;
-using AuraMusic.Kernel.Protocol;
-using AuraMusic.Kernel.State;
-using Concentus;
-using Concentus.Enums;
-using AudioEncoding = Android.Media.Encoding;
-using Environment = System.Environment;
-using AuraMusic.Mobile.Resources.Strings;
-
 namespace AuraMusic.Mobile.Casting;
 
 /// <summary>
@@ -158,11 +139,19 @@ public sealed class BroadcastService : Service
 
     void CaptureLoop(CancellationToken stoppingToken)
     {
+        // Same as playback: never let the capture fall behind the audio clock.
+        global::Android.OS.Process.SetThreadPriority(global::Android.OS.ThreadPriority.UrgentAudio);
+
         var encoder = OpusCodecFactory.CreateEncoder(AuraProtocol.SampleRate, AuraProtocol.Channels, OpusApplication.OPUS_APPLICATION_AUDIO);
         encoder.Bitrate = AuraProtocol.Bitrate;
+        encoder.Complexity = 10;
+        encoder.SignalType = OpusSignal.OPUS_SIGNAL_MUSIC;
+        encoder.MaxBandwidth = OpusBandwidth.OPUS_BANDWIDTH_FULLBAND; // never trade away the highs
 
         var pcm = new short[AuraProtocol.FrameSamples * AuraProtocol.Channels];
         var packet = new byte[AuraProtocol.MaxPacketSize];
+        var analyzer = new SpectrumAnalyzer(SpectrumHub.Bands, AuraProtocol.SampleRate, AuraProtocol.Channels);
+        int captured = 0;
 
         recorder!.StartRecording();
         while (!stoppingToken.IsCancellationRequested)
@@ -173,6 +162,13 @@ public sealed class BroadcastService : Service
                 if (count <= 0)
                     return; // stopped, or the recorder died
                 read += count;
+            }
+
+            if (++captured % 2 == 0) // the visualizer only needs 25 updates a second
+            {
+                var levels = new float[SpectrumHub.Bands];
+                analyzer.Analyze(pcm, levels);
+                SpectrumHub.Publish(levels);
             }
 
             ListenerLink[] targets;

@@ -1,5 +1,3 @@
-using Android;
-
 namespace AuraMusic.Mobile.Casting;
 
 /// <summary>Runtime permissions for Bluetooth streaming; the master additionally needs the microphone permission for playback capture.</summary>

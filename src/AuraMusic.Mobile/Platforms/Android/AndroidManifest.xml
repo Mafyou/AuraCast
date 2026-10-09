@@ -12,6 +12,10 @@
 	<!-- Capturing what the phone plays (AudioPlaybackCapture) -->
 	<uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+	<!-- In-app updates: read GitHub releases, download the APK and hand it to the package installer -->
+	<uses-permission android:name="android.permission.INTERNET" />
+	<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
 	<!-- Keep streaming with the screen off -->
 	<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />

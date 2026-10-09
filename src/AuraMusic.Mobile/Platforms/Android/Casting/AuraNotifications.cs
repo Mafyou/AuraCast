@@ -1,9 +1,3 @@
-using Android.App;
-using Android.Content;
-using Android.Content.PM;
-using Android.Graphics.Drawables;
-using AuraMusic.Mobile.Resources.Strings;
-
 namespace AuraMusic.Mobile.Casting;
 
 static class AuraNotifications

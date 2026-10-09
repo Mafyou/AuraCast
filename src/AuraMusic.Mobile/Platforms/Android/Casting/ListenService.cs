@@ -1,20 +1,3 @@
-using System.Collections.Frozen;
-using System.Threading.Channels;
-using Android.App;
-using Android.Bluetooth;
-using Android.Content;
-using Android.Content.PM;
-using Android.Media;
-using Android.OS;
-using Android.Util;
-using AuraMusic.Kernel.Playout;
-using AuraMusic.Kernel.Protocol;
-using AuraMusic.Kernel.State;
-using Concentus;
-using AudioEncoding = Android.Media.Encoding;
-using Environment = System.Environment;
-using AuraMusic.Mobile.Resources.Strings;
-
 namespace AuraMusic.Mobile.Casting;
 
 /// <summary>
@@ -26,7 +9,13 @@ public sealed class ListenService : Service
 {
     // Jitter buffer capacity, in 20 ms Opus packets; the playout policy lives in PlayoutController.
     const int MaxBufferedFrames = 15;
-    static readonly TimeSpan LateGrace = TimeSpan.FromMilliseconds(10);
+    // Most of the cushion sits in the AudioTrack, not in the channel: a late packet is waited for until the
+    // AudioTrack is about to run dry, and only then concealed.
+    const int LowWaterFrames = AuraProtocol.SampleRate / 50; // 20 ms
+
+    // Catching up on latency: 1 ms shaved off a 20 ms packet behind a 2 ms crossfade, inaudible on music.
+    const int CatchUpFrames = AuraProtocol.SampleRate / 1000;
+    const int CatchUpFadeFrames = 2 * CatchUpFrames;
 
     /// <summary>Paired devices that can be a master: phones, and tablets (which report themselves as computers).</summary>
     static readonly FrozenSet<MajorDeviceClass> MasterDeviceClasses = [MajorDeviceClass.Phone, MajorDeviceClass.Computer];
@@ -71,18 +60,19 @@ public sealed class ListenService : Service
                 AuraHub.Publish(new Searching());
                 using var socket = ConnectToMaster(adapter, stoppingToken);
                 if (socket is not null)
-                    await ListenAsync(socket, stoppingToken);
+                    Listen(socket, stoppingToken);
             }
-            catch (System.OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            catch (Exception) when (stoppingToken.IsCancellationRequested)
             {
-                return;
+                return; // stopping closes the socket under the reader: whatever it throws then is expected
             }
-            catch (Exception ex) when (ex is Java.IO.IOException or EndOfStreamException or InvalidDataException)
+            catch (InvalidDataException ex)
             {
-                if (stoppingToken.IsCancellationRequested)
-                    return;
-                if (ex is InvalidDataException)
-                    AuraHub.Publish(new Failed(ex.Message));
+                AuraHub.Publish(new Failed(ex.Message));
+            }
+            catch (Exception ex) when (ex is IOException or Java.IO.IOException)
+            {
+                // The master stopped or went out of range (streams wrap Java's IOException in System.IO's).
             }
             catch (Exception ex)
             {
@@ -127,21 +117,22 @@ public sealed class ListenService : Service
         return null;
     }
 
-    static async Task ListenAsync(BluetoothSocket socket, CancellationToken stoppingToken)
+    static void Listen(BluetoothSocket socket, CancellationToken stoppingToken)
     {
         using var closeOnStop = stoppingToken.Register(socket.Close);
         var stream = socket.InputStream!;
         AuraProtocol.ReadHeader(stream);
         AuraHub.Publish(new Listening(socket.RemoteDevice?.Name ?? "AuraMusic"));
-        await ReceiveAsync(stream, stoppingToken);
+        Receive(stream, stoppingToken);
     }
 
-    static async Task ReceiveAsync(System.IO.Stream stream, CancellationToken stoppingToken)
+    static void Receive(System.IO.Stream stream, CancellationToken stoppingToken)
     {
         var stats = new ReceiveStats();
         var packets = Channel.CreateBounded<byte[]>(
             new BoundedChannelOptions(MaxBufferedFrames) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true, SingleWriter = true });
-        var playback = Task.Run(() => PlayAsync(packets.Reader, stats, stoppingToken), stoppingToken);
+        var playback = new Thread(() => Play(packets.Reader, stats, stoppingToken)) { IsBackground = true, Name = "AuraMusic playback" };
+        playback.Start();
 
         try
         {
@@ -158,7 +149,7 @@ public sealed class ListenService : Service
         finally
         {
             packets.Writer.TryComplete();
-            await playback.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+            playback.Join(TimeSpan.FromSeconds(2));
         }
     }
 
@@ -166,44 +157,53 @@ public sealed class ListenService : Service
     /// Decodes on the playback clock, so a packet that is not there in time gets concealed by Opus
     /// instead of cutting the sound.
     /// </summary>
-    static async Task PlayAsync(ChannelReader<byte[]> packets, ReceiveStats stats, CancellationToken stoppingToken)
+    static void Play(ChannelReader<byte[]> packets, ReceiveStats stats, CancellationToken stoppingToken)
     {
-        int minBuffer = AudioTrack.GetMinBufferSize(AuraProtocol.SampleRate, ChannelOut.Stereo, AudioEncoding.Pcm16bit);
+        // A late wake-up of this thread starves the AudioTrack, which is heard as crackling:
+        // run it at Android's audio priority, like any music player.
+        global::Android.OS.Process.SetThreadPriority(global::Android.OS.ThreadPriority.UrgentAudio);
+
+        // Float output: codec overshoots cannot clip, and it is what the Android mixer works in anyway.
+        int minBuffer = AudioTrack.GetMinBufferSize(AuraProtocol.SampleRate, ChannelOut.Stereo, AudioEncoding.PcmFloat);
+        int hundredMs = AuraProtocol.SampleRate / 10 * AuraProtocol.Channels * sizeof(float);
         using var track = new AudioTrack.Builder()
             .SetAudioAttributes(new AudioAttributes.Builder()!
                 .SetUsage(AudioUsageKind.Media)!
                 .SetContentType(AudioContentType.Music)!
                 .Build()!)!
             .SetAudioFormat(new AudioFormat.Builder()
-                .SetEncoding(AudioEncoding.Pcm16bit)!
+                .SetEncoding(AudioEncoding.PcmFloat)!
                 .SetSampleRate(AuraProtocol.SampleRate)!
                 .SetChannelMask(ChannelOut.Stereo)!
                 .Build()!)!
             .SetTransferMode(AudioTrackMode.Stream)!
-            .SetBufferSizeInBytes(minBuffer * 2)!
+            .SetBufferSizeInBytes(Math.Max(minBuffer * 4, hundredMs))!
             .Build();
 
         var decoder = OpusCodecFactory.CreateDecoder(AuraProtocol.SampleRate, AuraProtocol.Channels);
-        var pcm = new short[AuraProtocol.FrameSamples * AuraProtocol.Channels];
+        var pcm = new float[AuraProtocol.FrameSamples * AuraProtocol.Channels];
 
         var playout = new PlayoutController(stats);
+        var analyzer = new SpectrumAnalyzer(SpectrumHub.Bands, AuraProtocol.SampleRate, AuraProtocol.Channels);
+        uint written = 0; // sample frames handed to the AudioTrack; wraps like its playback head
         track.Play();
         try
         {
-            await Prebuffer(packets, playout.PrebufferFrames, stoppingToken);
-            while (!packets.Completion.IsCompleted)
+            Prebuffer(packets, playout.PrebufferFrames, stoppingToken);
+            while (!packets.Completion.IsCompleted && !stoppingToken.IsCancellationRequested)
             {
                 if (!packets.TryRead(out var packet))
-                {
-                    // The AudioTrack still holds some audio: give a late packet a moment.
-                    await Task.Delay(LateGrace, stoppingToken);
-                    packets.TryRead(out packet);
-                }
+                    packet = WaitForLatePacket(packets, track, written, stoppingToken);
 
+                int length = pcm.Length;
                 switch (playout.Next(packet, packets.Count))
                 {
                     case Play(var data):
                         decoder.Decode(data, pcm, AuraProtocol.FrameSamples);
+                        break;
+                    case CatchUp(var data):
+                        decoder.Decode(data, pcm, AuraProtocol.FrameSamples);
+                        length = PcmCrossfade.Shorten(pcm, AuraProtocol.Channels, CatchUpFrames, CatchUpFadeFrames);
                         break;
                     case Conceal:
                         decoder.Decode(ReadOnlySpan<byte>.Empty, pcm, AuraProtocol.FrameSamples);
@@ -212,11 +212,19 @@ public sealed class ListenService : Service
                         decoder.Decode(data, pcm, AuraProtocol.FrameSamples);
                         continue;
                     case Rebuffer:
-                        await Prebuffer(packets, playout.PrebufferFrames, stoppingToken);
+                        Prebuffer(packets, playout.PrebufferFrames, stoppingToken);
                         continue;
                 }
 
-                track.Write(pcm, 0, pcm.Length); // blocking: paces the loop to the playback clock
+                track.Write(pcm, 0, length, WriteMode.Blocking); // paces the loop to the playback clock
+                written += (uint)(length / AuraProtocol.Channels);
+
+                if (written / AuraProtocol.FrameSamples % 2 == 0) // the visualizer only needs 25 updates a second
+                {
+                    var levels = new float[SpectrumHub.Bands];
+                    analyzer.Analyze(pcm.AsSpan(0, length), levels);
+                    SpectrumHub.Publish(levels);
+                }
             }
         }
         finally
@@ -226,18 +234,38 @@ public sealed class ListenService : Service
         }
     }
 
-    static async Task Prebuffer(ChannelReader<byte[]> packets, int frames, CancellationToken stoppingToken)
+    /// <summary>
+    /// Waits for a late packet as long as the AudioTrack still has audio to play; returns <see langword="null"/>
+    /// (conceal) only when it is about to run dry.
+    /// </summary>
+    static byte[]? WaitForLatePacket(ChannelReader<byte[]> packets, AudioTrack track, uint written, CancellationToken stoppingToken)
     {
-        while (packets.Count < frames && !packets.Completion.IsCompleted)
-            await Task.Delay(5, stoppingToken);
+        while (!stoppingToken.IsCancellationRequested && !packets.Completion.IsCompleted)
+        {
+            uint buffered = written - (uint)track.PlaybackHeadPosition;
+            if (buffered < LowWaterFrames)
+                return null;
+            Thread.Sleep(1);
+            if (packets.TryRead(out var packet))
+                return packet;
+        }
+        return null;
+    }
+
+    static void Prebuffer(ChannelReader<byte[]> packets, int frames, CancellationToken stoppingToken)
+    {
+        while (packets.Count < frames && !packets.Completion.IsCompleted && !stoppingToken.IsCancellationRequested)
+            Thread.Sleep(5);
     }
 
     sealed class ReceiveStats : IPlayoutMetrics
     {
         long windowStart = Environment.TickCount64;
         int frames, bytes;
-        int concealed, skipped, rebuffers;
+        int caughtUp, concealed, skipped, rebuffers;
         public int Dropped;
+
+        public void CaughtUp() => caughtUp++;
 
         public void Concealed() => concealed++;
 
@@ -255,9 +283,9 @@ public sealed class ListenService : Service
 
             // 50 frames/s means the link keeps up with real time.
             Log.Info(AuraLog.Tag, $"rx {frames * 1000.0 / elapsed:F1} frames/s, {bytes * 8.0 / elapsed:F0} kbps, "
-                + $"concealed {concealed}, skipped {skipped}, rebuffers {rebuffers}, dropped {Dropped}");
+                + $"caught up {caughtUp}, concealed {concealed}, skipped {skipped}, rebuffers {rebuffers}, dropped {Dropped}");
             windowStart = Environment.TickCount64;
-            frames = bytes = concealed = skipped = rebuffers = Dropped = 0;
+            frames = bytes = caughtUp = concealed = skipped = rebuffers = Dropped = 0;
         }
     }
 

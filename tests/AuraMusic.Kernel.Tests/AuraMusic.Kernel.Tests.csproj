@@ -17,9 +17,6 @@
     <PackageReference Include="xunit.v3" Version="4.0.1" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Using Include="Xunit" />
-  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\AuraMusic.Kernel\AuraMusic.Kernel.csproj" />

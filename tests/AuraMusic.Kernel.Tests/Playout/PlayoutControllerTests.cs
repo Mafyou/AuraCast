@@ -1,7 +1,3 @@
-using AuraMusic.Kernel.Playout;
-using Moq;
-using Shouldly;
-
 namespace AuraMusic.Kernel.Tests.Playout;
 
 public sealed class PlayoutControllerTests
@@ -12,7 +8,8 @@ public sealed class PlayoutControllerTests
     // Expression trees (ShouldAllBe) cannot hold an 'is' pattern.
     static bool IsConceal(PlayoutStep step) => step is Conceal;
 
-    PlayoutController CreateController() => new(metrics.Object) { MaxBacklogFrames = 8, MaxConcealedFrames = 3 };
+    PlayoutController CreateController() =>
+        new(metrics.Object) { CatchUpAboveFrames = 4, MaxBacklogFrames = 8, MaxConcealedFrames = 3 };
 
     [Fact]
     public void Next_PacketOnTime_PlaysIt()
@@ -86,17 +83,39 @@ public sealed class PlayoutControllerTests
     }
 
     [Fact]
-    public void Next_BacklogAtMax_StillPlays()
+    public void Next_BacklogAtMax_CatchesUpInsteadOfSkipping()
     {
         var step = CreateController().Next(packet, backlog: 8);
 
-        (step is Play).ShouldBeTrue();
+        var catchUp = step is CatchUp c ? c : null;
+        catchUp.ShouldNotBeNull().Packet.ShouldBeSameAs(packet);
+        metrics.Verify(m => m.CaughtUp(), Times.Once);
+        metrics.Verify(m => m.Skipped(), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(5)]
+    [InlineData(7)]
+    public void Next_SlightlyBehind_CatchesUp(int backlog)
+    {
+        (CreateController().Next(packet, backlog) is CatchUp).ShouldBeTrue();
     }
 
     [Fact]
-    public void Defaults_StartWith100MsInHand()
+    public void Next_BacklogAtCatchUpThreshold_Plays()
     {
-        new PlayoutController(metrics.Object).PrebufferFrames.ShouldBe(5);
+        (CreateController().Next(packet, backlog: 4) is Play).ShouldBeTrue();
+        metrics.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void Defaults_StartWith120MsInHand_CatchUpPast160Ms_SkipOnlyPast400Ms()
+    {
+        var controller = new PlayoutController(metrics.Object);
+
+        controller.PrebufferFrames.ShouldBe(6);
+        controller.CatchUpAboveFrames.ShouldBe(8);
+        controller.MaxBacklogFrames.ShouldBe(20);
     }
 
     [Theory]

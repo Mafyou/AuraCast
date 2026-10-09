@@ -1,7 +1,4 @@
-﻿using Android.App;
-using Android.Runtime;
-
-namespace AuraMusic.Mobile
+﻿namespace AuraMusic.Mobile
 {
     [Application]
     public class MainApplication : MauiApplication

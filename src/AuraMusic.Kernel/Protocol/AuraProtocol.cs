@@ -1,7 +1,3 @@
-using System.Buffers.Binary;
-using System.Globalization;
-using AuraMusic.Kernel.Resources;
-
 namespace AuraMusic.Kernel.Protocol;
 
 /// <summary>
@@ -16,7 +12,7 @@ public static class AuraProtocol
     public const int SampleRate = 48_000;
     public const int Channels = 2;
     public const int FrameSamples = SampleRate / 50; // 20 ms per channel
-    public const int Bitrate = 128_000; // transparent quality, a fraction of what RFCOMM carries
+    public const int Bitrate = 256_000; // well past transparent for Opus stereo music, still a fraction of what RFCOMM carries
     public const int MaxPacketSize = 1275;
 
     const byte Version = 1;

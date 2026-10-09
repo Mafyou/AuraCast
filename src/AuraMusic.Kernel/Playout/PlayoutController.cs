@@ -10,14 +10,24 @@ public sealed class PlayoutController(IPlayoutMetrics metrics)
     {
         get;
         init => field = value > 0 ? value : throw new ArgumentOutOfRangeException(nameof(PrebufferFrames), value, "Must be positive.");
-    } = 5;
+    } = 6;
 
-    /// <summary>Late packets pile up behind concealed ones; past this backlog one is skipped to stay in sync.</summary>
+    /// <summary>
+    /// Above this backlog we are lagging a bit: packets are played slightly shorter until we are back on time.
+    /// Keep it a little above <see cref="PrebufferFrames"/> so normal jitter does not trigger it.
+    /// </summary>
+    public int CatchUpAboveFrames
+    {
+        get;
+        init => field = value >= 0 ? value : throw new ArgumentOutOfRangeException(nameof(CatchUpAboveFrames), value, "Cannot be negative.");
+    } = 8;
+
+    /// <summary>Last resort, far behind (the link stalled then burst): a packet is dropped outright.</summary>
     public int MaxBacklogFrames
     {
         get;
         init => field = value >= 0 ? value : throw new ArgumentOutOfRangeException(nameof(MaxBacklogFrames), value, "Cannot be negative.");
-    } = 8;
+    } = 20;
 
     /// <summary>A hiccup is concealed; more consecutive missing packets than this means the link stalled.</summary>
     public int MaxConcealedFrames
@@ -49,6 +59,11 @@ public sealed class PlayoutController(IPlayoutMetrics metrics)
         {
             metrics.Skipped();
             return new Skip(packet);
+        }
+        if (backlog > CatchUpAboveFrames)
+        {
+            metrics.CaughtUp();
+            return new CatchUp(packet);
         }
         return new Play(packet);
     }
