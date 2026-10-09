@@ -1,0 +1,58 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="AuraCast.Mobile.MainPage"
+             BackgroundColor="#06122E"
+             Shell.NavBarIsVisible="False">
+
+    <Grid RowDefinitions="*,Auto,Auto" Padding="24,48,24,32" RowSpacing="14">
+
+        <VerticalStackLayout VerticalOptions="Center" Spacing="14">
+            <Label Text="AuraCast"
+                   FontFamily="OpenSansSemibold"
+                   FontSize="42"
+                   TextColor="White"
+                   HorizontalOptions="Center"
+                   SemanticProperties.HeadingLevel="Level1" />
+
+            <Label x:Name="StatusLabel"
+                   FontSize="20"
+                   TextColor="#7FD4FF"
+                   HorizontalTextAlignment="Center" />
+
+            <Label x:Name="HintLabel"
+                   FontSize="15"
+                   TextColor="#9AA9C7"
+                   HorizontalTextAlignment="Center" />
+        </VerticalStackLayout>
+
+        <VerticalStackLayout x:Name="ModeButtons" Grid.Row="1" Spacing="14">
+            <Button Text="🎵  Diffuser mon son"
+                    FontSize="18"
+                    HeightRequest="60"
+                    CornerRadius="30"
+                    BackgroundColor="#1E6BFF"
+                    TextColor="White"
+                    Clicked="OnBroadcastClicked" />
+
+            <Button Text="🎧  Écouter"
+                    FontSize="18"
+                    HeightRequest="60"
+                    CornerRadius="30"
+                    BackgroundColor="#7B3FE4"
+                    TextColor="White"
+                    Clicked="OnListenClicked" />
+        </VerticalStackLayout>
+
+        <Button x:Name="StopButton"
+                Grid.Row="2"
+                Text="Arrêter"
+                FontSize="18"
+                HeightRequest="60"
+                CornerRadius="30"
+                BackgroundColor="#22FFFFFF"
+                TextColor="White"
+                Clicked="OnStopClicked" />
+    </Grid>
+
+</ContentPage>
