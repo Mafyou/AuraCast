@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="HelpDescription" xml:space="preserve"><value>Comment ça marche ?</value></data>
+  <data name="LogoDescription" xml:space="preserve"><value>Logo AuraMusic</value></data>
+  <data name="BroadcastButton" xml:space="preserve"><value>&gt; DIFFUSER MON SON</value></data>
+  <data name="ListenButton" xml:space="preserve"><value>&gt; ÉCOUTER</value></data>
+  <data name="StopButton" xml:space="preserve"><value>■ ARRÊTER</value></data>
+  <data name="StatusIdle" xml:space="preserve"><value>&gt; que veux-tu faire ?</value></data>
+  <data name="HintIdle" xml:space="preserve"><value>Diffuse ta musique, ou écoute celle d'un téléphone à côté.</value></data>
+  <data name="StatusAdvertising" xml:space="preserve"><value>&gt; signal émis_</value></data>
+  <data name="HintAdvertising" xml:space="preserve"><value>Sur l'autre téléphone, appuie sur « Écouter ».</value></data>
+  <data name="StatusStreamingOne" xml:space="preserve"><value>&gt; 1 oreille connectée</value></data>
+  <data name="StatusStreamingMany" xml:space="preserve"><value>&gt; {0} oreilles connectées</value></data>
+  <data name="HintStreaming" xml:space="preserve"><value>Lance ta musique, dans n'importe quelle app : elle est partagée en direct.</value></data>
+  <data name="StatusSearching" xml:space="preserve"><value>&gt; recherche du signal_</value></data>
+  <data name="HintSearching" xml:space="preserve"><value>Les téléphones doivent être appairés en Bluetooth et à quelques mètres les uns des autres.</value></data>
+  <data name="StatusListening" xml:space="preserve"><value>&gt; connecté à {0}</value></data>
+  <data name="HintListening" xml:space="preserve"><value>Tu entends sa musique en direct. Tu peux éteindre l'écran.</value></data>
+  <data name="StatusFailed" xml:space="preserve"><value>&gt; erreur</value></data>
+  <data name="TutorialSkip" xml:space="preserve"><value>Passer</value></data>
+  <data name="TutorialNext" xml:space="preserve"><value>&gt; SUIVANT</value></data>
+  <data name="TutorialDone" xml:space="preserve"><value>&gt; C'EST PARTI</value></data>
+  <data name="TutorialWelcomeTitle" xml:space="preserve"><value>Nouveau pouvoir débloqué</value></data>
+  <data name="TutorialWelcomeText" xml:space="preserve"><value>Ton téléphone sait maintenant faire ce qu'il ne savait pas faire : diffuser sa musique vers les téléphones autour de toi. Sans Wi-Fi, sans internet.</value></data>
+  <data name="TutorialPairTitle" xml:space="preserve"><value>Relie les téléphones</value></data>
+  <data name="TutorialPairText" xml:space="preserve"><value>Une seule fois : sur un téléphone, ouvre Réglages › Bluetooth › Associer un nouvel appareil, choisis l'autre téléphone et valide le code des deux côtés.</value></data>
+  <data name="TutorialBroadcastTitle" xml:space="preserve"><value>Diffuse</value></data>
+  <data name="TutorialBroadcastText" xml:space="preserve"><value>Celui qui a la musique appuie sur « Diffuser mon son » et accepte les autorisations. Android parle d'« enregistrement de l'écran » : c'est sa façon de laisser AuraMusic capter le son, rien n'est enregistré. Lance ensuite ta musique, dans n'importe quelle app.</value></data>
+  <data name="TutorialListenTitle" xml:space="preserve"><value>Capte</value></data>
+  <data name="TutorialListenText" xml:space="preserve"><value>Les autres appuient sur « Écouter » : leur téléphone trouve tout seul celui qui diffuse et se reconnecte si vous vous éloignez. L'écran peut être éteint.</value></data>
+  <data name="TutorialTipsTitle" xml:space="preserve"><value>Astuces</value></data>
+  <data name="TutorialTipsText" xml:space="preserve"><value>Restez à quelques mètres les uns des autres. Le son arrive avec un léger décalage : dans la même pièce, mettez tous un casque pour éviter l'écho. Jusqu'à 3 ou 4 téléphones peuvent écouter en même temps.</value></data>
+  <data name="NotificationBroadcasting" xml:space="preserve"><value>Diffusion de ton son en cours</value></data>
+  <data name="NotificationListening" xml:space="preserve"><value>Écoute en cours</value></data>
+  <data name="NotificationStop" xml:space="preserve"><value>Arrêter</value></data>
+  <data name="ErrorOpenApp" xml:space="preserve"><value>Ouvre l'app pour lancer la diffusion.</value></data>
+  <data name="ErrorCaptureDenied" xml:space="preserve"><value>Autorisation de capture refusée.</value></data>
+  <data name="ErrorPermissionsBroadcast" xml:space="preserve"><value>AuraMusic a besoin du Bluetooth, des notifications et de la capture audio.</value></data>
+  <data name="ErrorPermissionsListen" xml:space="preserve"><value>AuraMusic a besoin du Bluetooth et des notifications.</value></data>
+  <data name="ErrorBluetoothOffBroadcast" xml:space="preserve"><value>Active le Bluetooth pour diffuser.</value></data>
+  <data name="ErrorBluetoothOffListen" xml:space="preserve"><value>Active le Bluetooth pour écouter.</value></data>
+  <data name="ErrorConnectionLost" xml:space="preserve"><value>Connexion Bluetooth perdue : {0}</value></data>
+  <data name="ErrorPairFirst" xml:space="preserve"><value>Appairez d'abord les téléphones dans les réglages Bluetooth.</value></data>
+  <data name="SwitchLanguageDescription" xml:space="preserve"><value>Passer en anglais</value></data>
+</root>

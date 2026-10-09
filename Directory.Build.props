@@ -3,5 +3,7 @@
 		<LangVersion>15.0</LangVersion>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
+		<!-- French is the default language; English comes from the .en.resx satellites. -->
+		<NeutralLanguage>fr</NeutralLanguage>
 	</PropertyGroup>
 </Project>

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Threading.Channels;
 using Android.App;
 using Android.Bluetooth;
@@ -14,6 +15,7 @@ using Concentus;
 using Concentus.Enums;
 using AudioEncoding = Android.Media.Encoding;
 using Environment = System.Environment;
+using AuraCast.Mobile.Resources.Strings;
 
 namespace AuraCast.Mobile.Casting;
 
@@ -46,7 +48,7 @@ public sealed class BroadcastService : Service
         }
 
         // Android 14+: the foreground service must be running before the projection is created.
-        AuraNotifications.StartForeground(this, "Diffusion de ton son en cours", ForegroundService.TypeMediaProjection);
+        AuraNotifications.StartForeground(this, AppStrings.NotificationBroadcasting, ForegroundService.TypeMediaProjection);
         try
         {
             Start(intent);
@@ -63,7 +65,7 @@ public sealed class BroadcastService : Service
     {
         var adapter = ((BluetoothManager)GetSystemService(BluetoothService)!).Adapter;
         if (adapter is not { IsEnabled: true })
-            throw new InvalidOperationException("Active le Bluetooth pour diffuser.");
+            throw new InvalidOperationException(AppStrings.ErrorBluetoothOffBroadcast);
 
         var resultCode = intent.GetIntExtra(ExtraResultCode, 0);
 #pragma warning disable CA1422 // the typed overload only exists on API 33+
@@ -71,18 +73,18 @@ public sealed class BroadcastService : Service
 #pragma warning restore CA1422
         var projectionManager = (MediaProjectionManager)GetSystemService(MediaProjectionService)!;
         projection = projectionManager.GetMediaProjection(resultCode, resultData)
-            ?? throw new InvalidOperationException("Autorisation de capture refusée.");
+            ?? throw new InvalidOperationException(AppStrings.ErrorCaptureDenied);
         projection.RegisterCallback(new ProjectionStoppedCallback(this), null);
 
         recorder = CreateRecorder(projection);
         // BLE L2CAP topped out at ~14 kbps on our phones; RFCOMM over BR/EDR easily carries the stream.
         // Listeners find us among their paired devices through this SDP record.
-        server = adapter.ListenUsingInsecureRfcommWithServiceRecord("AuraCast", Java.Util.UUID.FromString(AuraProtocol.ServiceUuid.ToString()))!;
+        server = adapter.ListenUsingInsecureRfcommWithServiceRecord("AuraMusic", Java.Util.UUID.FromString(AuraProtocol.ServiceUuid.ToString()))!;
 
         cts = new CancellationTokenSource();
         var stoppingToken = cts.Token;
         _ = Task.Run(() => AcceptLoop(stoppingToken));
-        captureThread = new Thread(() => CaptureLoop(stoppingToken)) { IsBackground = true, Name = "AuraCast capture", Priority = System.Threading.ThreadPriority.Highest };
+        captureThread = new Thread(() => CaptureLoop(stoppingToken)) { IsBackground = true, Name = "AuraMusic capture", Priority = System.Threading.ThreadPriority.Highest };
         captureThread.Start();
 
         AuraHub.Publish(new Advertising());
@@ -126,7 +128,7 @@ public sealed class BroadcastService : Service
             }
             catch (Java.IO.IOException ex)
             {
-                AuraHub.Publish(new Failed($"Connexion Bluetooth perdue : {ex.Message}"));
+                AuraHub.Publish(new Failed(string.Format(CultureInfo.CurrentCulture, AppStrings.ErrorConnectionLost, ex.Message)));
                 return;
             }
 

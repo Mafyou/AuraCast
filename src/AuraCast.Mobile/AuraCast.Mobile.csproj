@@ -18,7 +18,7 @@
 		<MauiXamlInflator>SourceGen</MauiXamlInflator>
 
 		<!-- Display name -->
-		<ApplicationTitle>AuraCast</ApplicationTitle>
+		<ApplicationTitle>AuraMusic</ApplicationTitle>
 
 		<!-- App Identifier -->
 		<ApplicationId>com.mafyou.auracast</ApplicationId>
@@ -39,14 +39,15 @@
 
 	<ItemGroup>
 		<!-- App Icon -->
-		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#512BD4" />
+		<!-- The logo sits on its own dark green, scaled so the outer phones stay inside round launcher masks. -->
+		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.png" ForegroundScale="0.62" />
 
 		<!-- Splash Screen -->
-		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#512BD4" BaseSize="128,128" />
+		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#000C08" />
 
 		<!-- Images -->
 		<MauiImage Include="Resources\Images\*" />
-		<MauiImage Update="Resources\Images\dotnet_bot.png" Resize="True" BaseSize="300,185" />
+		<MauiImage Update="Resources\Images\splash_screen.png" BaseSize="384,400" />
 		
 		<!-- Custom Fonts -->
 		<MauiFont Include="Resources\Fonts\*" />
@@ -65,4 +66,12 @@
 	  <ProjectReference Include="..\AuraCast.Kernel\AuraCast.Kernel.csproj" />
 	</ItemGroup>
 
+
+	<ItemGroup>
+		<EmbeddedResource Update="Resources\Strings\AppStrings.resx"
+		                  StronglyTypedLanguage="CSharp"
+		                  StronglyTypedNamespace="AuraCast.Mobile.Resources.Strings"
+		                  StronglyTypedClassName="AppStrings"
+		                  StronglyTypedFileName="$(IntermediateOutputPath)AppStrings.Designer.cs" />
+	</ItemGroup>
 </Project>

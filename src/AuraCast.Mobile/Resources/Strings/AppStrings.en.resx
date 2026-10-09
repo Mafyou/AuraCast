@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="HelpDescription" xml:space="preserve"><value>How does it work?</value></data>
+  <data name="LogoDescription" xml:space="preserve"><value>AuraMusic logo</value></data>
+  <data name="BroadcastButton" xml:space="preserve"><value>&gt; SHARE MY SOUND</value></data>
+  <data name="ListenButton" xml:space="preserve"><value>&gt; LISTEN</value></data>
+  <data name="StopButton" xml:space="preserve"><value>■ STOP</value></data>
+  <data name="StatusIdle" xml:space="preserve"><value>&gt; what do you want to do?</value></data>
+  <data name="HintIdle" xml:space="preserve"><value>Share your music, or listen to a phone nearby.</value></data>
+  <data name="StatusAdvertising" xml:space="preserve"><value>&gt; signal on air_</value></data>
+  <data name="HintAdvertising" xml:space="preserve"><value>On the other phone, tap “Listen”.</value></data>
+  <data name="StatusStreamingOne" xml:space="preserve"><value>&gt; 1 ear connected</value></data>
+  <data name="StatusStreamingMany" xml:space="preserve"><value>&gt; {0} ears connected</value></data>
+  <data name="HintStreaming" xml:space="preserve"><value>Play your music in any app: it is shared live.</value></data>
+  <data name="StatusSearching" xml:space="preserve"><value>&gt; scanning for the signal_</value></data>
+  <data name="HintSearching" xml:space="preserve"><value>The phones must be paired over Bluetooth and a few meters from each other.</value></data>
+  <data name="StatusListening" xml:space="preserve"><value>&gt; connected to {0}</value></data>
+  <data name="HintListening" xml:space="preserve"><value>You hear their music live. You can turn the screen off.</value></data>
+  <data name="StatusFailed" xml:space="preserve"><value>&gt; error</value></data>
+  <data name="TutorialSkip" xml:space="preserve"><value>Skip</value></data>
+  <data name="TutorialNext" xml:space="preserve"><value>&gt; NEXT</value></data>
+  <data name="TutorialDone" xml:space="preserve"><value>&gt; LET'S GO</value></data>
+  <data name="TutorialWelcomeTitle" xml:space="preserve"><value>New power unlocked</value></data>
+  <data name="TutorialWelcomeText" xml:space="preserve"><value>Your phone can now do something it never could: stream its music to the phones around you. No Wi-Fi, no internet.</value></data>
+  <data name="TutorialPairTitle" xml:space="preserve"><value>Link the phones</value></data>
+  <data name="TutorialPairText" xml:space="preserve"><value>Only once: on one phone, open Settings › Bluetooth › Pair new device, pick the other phone and confirm the code on both.</value></data>
+  <data name="TutorialBroadcastTitle" xml:space="preserve"><value>Broadcast</value></data>
+  <data name="TutorialBroadcastText" xml:space="preserve"><value>Whoever has the music taps “Share my sound” and accepts the permissions. Android calls it “screen recording”: that is how it lets AuraMusic capture the sound, nothing is recorded. Then play your music, in any app.</value></data>
+  <data name="TutorialListenTitle" xml:space="preserve"><value>Tune in</value></data>
+  <data name="TutorialListenText" xml:space="preserve"><value>The others tap “Listen”: their phone finds the broadcaster on its own and reconnects if you drift apart. The screen can be off.</value></data>
+  <data name="TutorialTipsTitle" xml:space="preserve"><value>Tips</value></data>
+  <data name="TutorialTipsText" xml:space="preserve"><value>Stay within a few meters. The sound arrives slightly delayed: in the same room, everyone wears headphones to avoid echo. Up to 3 or 4 phones can listen at once.</value></data>
+  <data name="NotificationBroadcasting" xml:space="preserve"><value>Sharing your sound</value></data>
+  <data name="NotificationListening" xml:space="preserve"><value>Listening</value></data>
+  <data name="NotificationStop" xml:space="preserve"><value>Stop</value></data>
+  <data name="ErrorOpenApp" xml:space="preserve"><value>Open the app to start sharing.</value></data>
+  <data name="ErrorCaptureDenied" xml:space="preserve"><value>Sound capture was not allowed.</value></data>
+  <data name="ErrorPermissionsBroadcast" xml:space="preserve"><value>AuraMusic needs Bluetooth, notifications and audio capture.</value></data>
+  <data name="ErrorPermissionsListen" xml:space="preserve"><value>AuraMusic needs Bluetooth and notifications.</value></data>
+  <data name="ErrorBluetoothOffBroadcast" xml:space="preserve"><value>Turn Bluetooth on to share.</value></data>
+  <data name="ErrorBluetoothOffListen" xml:space="preserve"><value>Turn Bluetooth on to listen.</value></data>
+  <data name="ErrorConnectionLost" xml:space="preserve"><value>Bluetooth connection lost: {0}</value></data>
+  <data name="ErrorPairFirst" xml:space="preserve"><value>Pair the phones first in the Bluetooth settings.</value></data>
+  <data name="SwitchLanguageDescription" xml:space="preserve"><value>Switch to French</value></data>
+</root>

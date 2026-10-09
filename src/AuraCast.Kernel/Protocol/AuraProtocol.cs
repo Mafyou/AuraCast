@@ -1,4 +1,6 @@
 using System.Buffers.Binary;
+using System.Globalization;
+using AuraCast.Kernel.Resources;
 
 namespace AuraCast.Kernel.Protocol;
 
@@ -34,9 +36,9 @@ public static class AuraProtocol
         Span<byte> header = stackalloc byte[5];
         stream.ReadExactly(header);
         if (!header[..4].SequenceEqual(Magic))
-            throw new InvalidDataException("Ce n'est pas un flux AuraCast.");
+            throw new InvalidDataException(KernelStrings.NotAuraStream);
         if (header[4] != Version)
-            throw new InvalidDataException($"Version AuraCast incompatible ({header[4]} au lieu de {Version}). Mettez les deux apps à jour.");
+            throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, KernelStrings.IncompatibleVersion, header[4], Version));
     }
 
     public static void WriteFrame(Stream stream, ReadOnlySpan<byte> packet)
@@ -55,7 +57,7 @@ public static class AuraProtocol
         stream.ReadExactly(length);
         int size = BinaryPrimitives.ReadUInt16LittleEndian(length);
         if (size > packet.Length)
-            throw new InvalidDataException($"Trame audio trop grande ({size} octets).");
+            throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, KernelStrings.FrameTooLarge, size));
         stream.ReadExactly(packet[..size]);
         return size;
     }

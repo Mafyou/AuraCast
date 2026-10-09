@@ -1,4 +1,4 @@
-# AuraCast
+# AuraMusic
 
 Partage le son d'un téléphone Android avec d'autres téléphones Android, en Bluetooth, sans Wi-Fi ni internet.
 Une alternative maison à LE Audio Auracast pour les téléphones qui ne le supportent pas.
@@ -59,7 +59,7 @@ adb install -r src/AuraCast.Mobile/bin/Debug/net11.0-android/com.mafyou.auracast
 ### Mesures
 
 ```sh
-adb logcat -s AuraCast
+adb logcat -s AuraMusic
 ```
 
 - côté master : `tx … frames/s, … frames/write, … ms/write, queued, dropped` ;

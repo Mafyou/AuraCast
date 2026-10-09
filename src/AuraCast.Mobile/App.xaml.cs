@@ -6,6 +6,7 @@ namespace AuraCast.Mobile
     {
         public App()
         {
+            LanguageSettings.Apply();
             InitializeComponent();
         }
 

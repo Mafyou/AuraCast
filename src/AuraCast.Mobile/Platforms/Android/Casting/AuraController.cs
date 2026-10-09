@@ -1,6 +1,7 @@
 using Android.App;
 using Android.Content;
 using AuraCast.Kernel.State;
+using AuraCast.Mobile.Resources.Strings;
 
 namespace AuraCast.Mobile.Casting;
 
@@ -14,10 +15,10 @@ public static class AuraController
         await EnsurePermissionsAsync(capture: true);
 
         var activity = Platform.CurrentActivity as MainActivity
-            ?? throw new InvalidOperationException("Ouvre l'app pour lancer la diffusion.");
+            ?? throw new InvalidOperationException(AppStrings.ErrorOpenApp);
         var (resultCode, data) = await activity.RequestMediaProjectionAsync();
         if (resultCode != Result.Ok || data is null)
-            throw new InvalidOperationException("Autorisation de capture refusée.");
+            throw new InvalidOperationException(AppStrings.ErrorCaptureDenied);
 
         var intent = new Intent(Context, typeof(BroadcastService))
             .PutExtra(BroadcastService.ExtraResultCode, (int)resultCode)
@@ -42,7 +43,7 @@ public static class AuraController
     {
         if (await new AuraPermissions(capture).RequestAsync() != PermissionStatus.Granted)
             throw new InvalidOperationException(capture
-                ? "AuraCast a besoin du Bluetooth, des notifications et de la capture audio."
-                : "AuraCast a besoin du Bluetooth et des notifications.");
+                ? AppStrings.ErrorPermissionsBroadcast
+                : AppStrings.ErrorPermissionsListen);
     }
 }

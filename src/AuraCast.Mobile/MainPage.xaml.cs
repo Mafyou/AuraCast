@@ -1,21 +1,39 @@
-﻿using AuraCast.Kernel.State;
+﻿using System.Globalization;
+using AuraCast.Kernel.Localization;
+using AuraCast.Kernel.State;
 using AuraCast.Mobile.Casting;
+using AuraCast.Mobile.Resources.Strings;
 
 namespace AuraCast.Mobile
 {
     public partial class MainPage : ContentPage
     {
+        // Only on launch, not when the page is rebuilt after a language switch.
+        static bool splashShown;
+
         public MainPage()
         {
             InitializeComponent();
+            LanguageButton.Text = $"🌐 {AppLanguages.Next(LanguageSettings.Current).ToUpperInvariant()}";
             Render(AuraHub.Current);
         }
 
-        protected override void OnAppearing()
+        protected override async void OnAppearing()
         {
             base.OnAppearing();
             AuraHub.StateChanged += OnStateChanged;
             Render(AuraHub.Current);
+
+            if (!splashShown)
+            {
+                splashShown = true;
+                await Task.Delay(TimeSpan.FromSeconds(2));
+                await SplashOverlay.FadeToAsync(0, 400);
+            }
+            SplashOverlay.IsVisible = false;
+
+            if (!TutorialPage.HasBeenSeen && Navigation.ModalStack.Count == 0)
+                await Navigation.PushModalAsync(new TutorialPage());
         }
 
         protected override void OnDisappearing()
@@ -30,13 +48,13 @@ namespace AuraCast.Mobile
         {
             (StatusLabel.Text, HintLabel.Text) = state switch
             {
-                Idle => ("Prêt", "Diffuse le son de ton téléphone, ou écoute celui de l'autre."),
-                Advertising => ("En attente d'une oreille…", "Sur l'autre téléphone, appuie sur « Écouter »."),
-                Streaming(var listeners) => (listeners == 1 ? "1 personne t'écoute 💙" : $"{listeners} personnes t'écoutent 💙",
-                    "Lance YouTube Music ou n'importe quelle app : tout le son est partagé."),
-                Searching => ("Recherche du téléphone qui diffuse…", "Les deux téléphones doivent être appairés en Bluetooth et à quelques mètres l'un de l'autre."),
-                Listening(var master) => ($"À l'écoute de {master} 🎧", "Tu peux éteindre l'écran, la musique continue."),
-                Failed(var reason) => ("Oups", reason),
+                Idle => (AppStrings.StatusIdle, AppStrings.HintIdle),
+                Advertising => (AppStrings.StatusAdvertising, AppStrings.HintAdvertising),
+                Streaming(1) => (AppStrings.StatusStreamingOne, AppStrings.HintStreaming),
+                Streaming(var listeners) => (Format(AppStrings.StatusStreamingMany, listeners), AppStrings.HintStreaming),
+                Searching => (AppStrings.StatusSearching, AppStrings.HintSearching),
+                Listening(var master) => (Format(AppStrings.StatusListening, master), AppStrings.HintListening),
+                Failed(var reason) => (AppStrings.StatusFailed, reason),
             };
 
             bool active = state is Advertising or Streaming or Searching or Listening;
@@ -49,6 +67,17 @@ namespace AuraCast.Mobile
         async void OnListenClicked(object? sender, EventArgs e) => await RunAsync(AuraController.StartListeningAsync);
 
         void OnStopClicked(object? sender, EventArgs e) => AuraController.Stop();
+
+        static string Format(string format, object value) => string.Format(CultureInfo.CurrentCulture, format, value);
+
+        void OnLanguageClicked(object? sender, EventArgs e)
+        {
+            LanguageSettings.SwitchToNext();
+            // Rebuild the UI so every text is looked up again in the new language.
+            Window.Page = new AppShell();
+        }
+
+        async void OnHelpClicked(object? sender, EventArgs e) => await Navigation.PushModalAsync(new TutorialPage());
 
         static async Task RunAsync(Func<Task> start)
         {

@@ -4,4 +4,12 @@
     <TargetFramework>net11.0</TargetFramework>
   </PropertyGroup>
 
+
+  <ItemGroup>
+    <EmbeddedResource Update="Resources\KernelStrings.resx"
+                      StronglyTypedLanguage="CSharp"
+                      StronglyTypedNamespace="AuraCast.Kernel.Resources"
+                      StronglyTypedClassName="KernelStrings"
+                      StronglyTypedFileName="$(IntermediateOutputPath)KernelStrings.Designer.cs" />
+  </ItemGroup>
 </Project>

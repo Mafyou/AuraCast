@@ -13,6 +13,7 @@ using AuraCast.Kernel.State;
 using Concentus;
 using AudioEncoding = Android.Media.Encoding;
 using Environment = System.Environment;
+using AuraCast.Mobile.Resources.Strings;
 
 namespace AuraCast.Mobile.Casting;
 
@@ -45,12 +46,12 @@ public sealed class ListenService : Service
         if (cts is not null)
             return StartCommandResult.NotSticky;
 
-        AuraNotifications.StartForeground(this, "Écoute en cours", ForegroundService.TypeMediaPlayback);
+        AuraNotifications.StartForeground(this, AppStrings.NotificationListening, ForegroundService.TypeMediaPlayback);
 
         var adapter = ((BluetoothManager)GetSystemService(BluetoothService)!).Adapter;
         if (adapter is not { IsEnabled: true })
         {
-            AuraHub.Publish(new Failed("Active le Bluetooth pour écouter."));
+            AuraHub.Publish(new Failed(AppStrings.ErrorBluetoothOffListen));
             StopSelf();
             return StartCommandResult.NotSticky;
         }
@@ -102,7 +103,7 @@ public sealed class ListenService : Service
             .Where(device => device.BluetoothClass is { } deviceClass && MasterDeviceClasses.Contains(deviceClass.MajorDeviceClass))
             .ToList() ?? [];
         if (phones.Count == 0)
-            throw new InvalidOperationException("Appairez d'abord les deux téléphones dans les réglages Bluetooth.");
+            throw new InvalidOperationException(AppStrings.ErrorPairFirst);
 
         var lastMaster = Preferences.Get(LastMasterKey, null);
         var uuid = Java.Util.UUID.FromString(AuraProtocol.ServiceUuid.ToString());
@@ -131,7 +132,7 @@ public sealed class ListenService : Service
         using var closeOnStop = stoppingToken.Register(socket.Close);
         var stream = socket.InputStream!;
         AuraProtocol.ReadHeader(stream);
-        AuraHub.Publish(new Listening(socket.RemoteDevice?.Name ?? "AuraCast"));
+        AuraHub.Publish(new Listening(socket.RemoteDevice?.Name ?? "AuraMusic"));
         await ReceiveAsync(stream, stoppingToken);
     }
 
