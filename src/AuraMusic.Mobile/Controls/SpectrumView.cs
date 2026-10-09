@@ -1,19 +1,29 @@
 namespace AuraMusic.Mobile.Controls;
 
 /// <summary>
-/// Matrix-style spectrum: one column of glyphs per frequency band, lit from the bottom up.
+/// Matrix-style spectrum: green bars drawn as plain rectangles under a fixed stencil with glyph-shaped holes,
+/// so each band reads as a column of letters lighting up, for ~30 draw calls a frame instead of 128 glyphs.
 /// Feed it with <see cref="Post"/> from any thread.
 /// </summary>
-public sealed class SpectrumView : GraphicsView
+public sealed class SpectrumView : ContentView
 {
-    readonly SpectrumDrawable spectrum = new();
+    readonly BarsDrawable bars = new();
+    readonly GraphicsView canvas;
     float[]? latest;
     int redrawQueued;
 
     public SpectrumView()
     {
-        Drawable = spectrum;
         InputTransparent = true;
+        canvas = new GraphicsView { Drawable = bars };
+        Content = new Grid
+        {
+            Children =
+            {
+                canvas,
+                new Image { Source = "spectrum_stencil.png", Aspect = Aspect.Fill }, // 16 × 8 cells, like the bars
+            },
+        };
     }
 
     /// <summary>
@@ -27,71 +37,58 @@ public sealed class SpectrumView : GraphicsView
             Dispatcher.Dispatch(DrawLatest);
     }
 
+    public void Clear()
+    {
+        bars.Push(new float[SpectrumHub.Bands], decay: 0);
+        canvas.Invalidate();
+    }
+
     void DrawLatest()
     {
         Volatile.Write(ref redrawQueued, 0);
         if (Interlocked.Exchange(ref latest, null) is { } levels)
         {
-            spectrum.Push(levels);
-            Invalidate();
+            bars.Push(levels);
+            canvas.Invalidate();
         }
     }
 
-    public void Clear()
+    sealed class BarsDrawable : IDrawable
     {
-        spectrum.Push(new float[SpectrumHub.Bands], decay: 0);
-        Invalidate();
-    }
-
-    sealed class SpectrumDrawable : IDrawable
-    {
-        const float CellHeight = 15;
+        public const int Rows = 8; // must match spectrum_stencil.png
         const float Decay = 0.82f; // falls smoothly instead of flickering with every frame
 
-        static readonly string[] Glyphs = [.. "ｦｱｳｴｵｶｷｹｺｻｼｽｾｿﾀﾂﾃﾅﾆﾇﾈﾊﾋﾎﾏﾐﾑﾒﾓﾔﾕﾗﾘﾜ0123456789".Select(glyph => glyph.ToString())];
+        static readonly Color Unlit = Color.FromArgb("#1400C853");
+        static readonly Color Lit = Color.FromArgb("#DD00C853");
         static readonly Color Head = Color.FromArgb("#C8FFE0");
-        static readonly Color Lit = Color.FromArgb("#00C853");
-        static readonly Microsoft.Maui.Graphics.Font Font = new("monospace");
 
         readonly float[] shown = new float[SpectrumHub.Bands];
-        readonly Random random = new();
-        int[] cells = [];
-        int rows;
 
         public void Push(float[] levels, float decay = Decay)
         {
             for (int band = 0; band < shown.Length && band < levels.Length; band++)
                 shown[band] = MathF.Max(levels[band], shown[band] * decay);
-            for (int i = 0; i < cells.Length / 12; i++)
-                cells[random.Next(cells.Length)] = random.Next(Glyphs.Length);
         }
 
         public void Draw(ICanvas canvas, RectF dirtyRect)
         {
-            int newRows = Math.Max(1, (int)(dirtyRect.Height / CellHeight));
-            if (newRows != rows)
-            {
-                rows = newRows;
-                cells = [.. Enumerable.Range(0, rows * shown.Length).Select(_ => random.Next(Glyphs.Length))];
-            }
-
             float columnWidth = dirtyRect.Width / shown.Length;
-            canvas.Font = Font;
-            canvas.FontSize = CellHeight * 0.85f;
+            float rowHeight = dirtyRect.Height / Rows;
+
+            canvas.FillColor = Unlit; // unlit letters stay faintly visible
+            canvas.FillRectangle(dirtyRect);
 
             for (int band = 0; band < shown.Length; band++)
             {
-                int lit = (int)MathF.Round(shown[band] * rows);
-                for (int row = 0; row < rows; row++) // row 0 is the bottom
-                {
-                    bool on = row < lit;
-                    canvas.FontColor = !on ? Lit.WithAlpha(0.08f)
-                        : row == lit - 1 ? Head
-                        : Lit.WithAlpha(0.45f + 0.55f * row / rows);
-                    float y = dirtyRect.Height - (row + 1) * CellHeight;
-                    canvas.DrawString(Glyphs[cells[row * shown.Length + band]], band * columnWidth, y, columnWidth, CellHeight,
-                        HorizontalAlignment.Center, VerticalAlignment.Center);
-                }
+                int lit = (int)MathF.Round(shown[band] * Rows); // whole cells, so letters light up fully
+                if (lit == 0)
+                    continue;
+                float x = band * columnWidth;
+                float top = dirtyRect.Height - lit * rowHeight;
+                canvas.FillColor = Lit;
+                canvas.FillRectangle(x, top + rowHeight, columnWidth, (lit - 1) * rowHeight);
+                canvas.FillColor = Head;
+                canvas.FillRectangle(x, top, columnWidth, rowHeight);
             }
         }
     }

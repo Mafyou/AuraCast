@@ -34,3 +34,4 @@ global using Microsoft.Extensions.Logging;
 global using Application = Microsoft.Maui.Controls.Application;
 global using AudioEncoding = Android.Media.Encoding;
 global using Environment = System.Environment;
+global using Image = Microsoft.Maui.Controls.Image;
