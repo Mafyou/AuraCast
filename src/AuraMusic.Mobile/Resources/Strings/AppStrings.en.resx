@@ -33,7 +33,7 @@
   <data name="TutorialListenTitle" xml:space="preserve"><value>Tune in</value></data>
   <data name="TutorialListenText" xml:space="preserve"><value>The others tap “Listen”: their phone finds the broadcaster on its own and reconnects if you drift apart. The screen can be off.</value></data>
   <data name="TutorialTipsTitle" xml:space="preserve"><value>Tips</value></data>
-  <data name="TutorialTipsText" xml:space="preserve"><value>Stay within a few meters. The sound arrives slightly delayed: in the same room, everyone wears headphones to avoid echo. Up to 3 or 4 phones can listen at once.</value></data>
+  <data name="TutorialTipsText" xml:space="preserve"><value>Stay within a few meters. The sound arrives slightly delayed: in the same room, everyone wears headphones to avoid echo. Up to 3 or 4 phones can listen at once. Pull the home screen down to check for an update.</value></data>
   <data name="NotificationBroadcasting" xml:space="preserve"><value>Sharing your sound</value></data>
   <data name="NotificationListening" xml:space="preserve"><value>Listening</value></data>
   <data name="NotificationStop" xml:space="preserve"><value>Stop</value></data>
@@ -54,4 +54,6 @@
   <data name="UpdateAllowInstall" xml:space="preserve"><value>Android must allow AuraMusic to install apps. Turn on “Allow from this source”, then come back here: the installation starts on its own.</value></data>
   <data name="UpdateFailed" xml:space="preserve"><value>The update failed: {0}</value></data>
   <data name="UpdateOpenSettings" xml:space="preserve"><value>Open settings</value></data>
+  <data name="UpdateUpToDate" xml:space="preserve"><value>You already have the latest version ({0}).</value></data>
+  <data name="UpdateCheckFailed" xml:space="preserve"><value>Could not check for updates: {0}</value></data>
 </root>

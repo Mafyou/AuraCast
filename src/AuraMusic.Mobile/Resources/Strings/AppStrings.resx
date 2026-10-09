@@ -33,7 +33,7 @@
   <data name="TutorialListenTitle" xml:space="preserve"><value>Capte</value></data>
   <data name="TutorialListenText" xml:space="preserve"><value>Les autres appuient sur « Écouter » : leur téléphone trouve tout seul celui qui diffuse et se reconnecte si vous vous éloignez. L'écran peut être éteint.</value></data>
   <data name="TutorialTipsTitle" xml:space="preserve"><value>Astuces</value></data>
-  <data name="TutorialTipsText" xml:space="preserve"><value>Restez à quelques mètres les uns des autres. Le son arrive avec un léger décalage : dans la même pièce, mettez tous un casque pour éviter l'écho. Jusqu'à 3 ou 4 téléphones peuvent écouter en même temps.</value></data>
+  <data name="TutorialTipsText" xml:space="preserve"><value>Restez à quelques mètres les uns des autres. Le son arrive avec un léger décalage : dans la même pièce, mettez tous un casque pour éviter l'écho. Jusqu'à 3 ou 4 téléphones peuvent écouter en même temps. Tire l'écran d'accueil vers le bas pour chercher une mise à jour.</value></data>
   <data name="NotificationBroadcasting" xml:space="preserve"><value>Diffusion de ton son en cours</value></data>
   <data name="NotificationListening" xml:space="preserve"><value>Écoute en cours</value></data>
   <data name="NotificationStop" xml:space="preserve"><value>Arrêter</value></data>
@@ -54,4 +54,6 @@
   <data name="UpdateAllowInstall" xml:space="preserve"><value>Android doit autoriser AuraMusic à installer des applis. Active « Autoriser depuis cette source », puis reviens ici : l'installation démarrera toute seule.</value></data>
   <data name="UpdateFailed" xml:space="preserve"><value>La mise à jour a échoué : {0}</value></data>
   <data name="UpdateOpenSettings" xml:space="preserve"><value>Ouvrir les réglages</value></data>
+  <data name="UpdateUpToDate" xml:space="preserve"><value>Tu as déjà la dernière version ({0}).</value></data>
+  <data name="UpdateCheckFailed" xml:space="preserve"><value>Impossible de vérifier les mises à jour : {0}</value></data>
 </root>

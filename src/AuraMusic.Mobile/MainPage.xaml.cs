@@ -37,7 +37,7 @@
             if (!updateOffered)
             {
                 updateOffered = true;
-                await OfferUpdateAsync();
+                await OfferUpdateAsync(onDemand: false);
             }
         }
 
@@ -80,10 +80,33 @@
 
         static string Format(string format, object value) => string.Format(CultureInfo.CurrentCulture, format, value);
 
-        async Task OfferUpdateAsync()
+        async void OnPullToUpdate(object? sender, EventArgs e)
         {
-            if (await AppUpdater.CheckAsync(CancellationToken.None) is not UpdateAvailable(var release))
-                return; // up to date, or offline: we will look again next launch
+            try
+            {
+                await OfferUpdateAsync(onDemand: true);
+            }
+            finally
+            {
+                UpdateRefresh.IsRefreshing = false;
+            }
+        }
+
+        /// <param name="onDemand">Pulled by the user: say so when there is nothing new, instead of staying silent.</param>
+        async Task OfferUpdateAsync(bool onDemand)
+        {
+            var check = await AppUpdater.CheckAsync(CancellationToken.None);
+            if (check is not UpdateAvailable(var release))
+            {
+                if (onDemand)
+                {
+                    var message = check is CheckFailed(var reason)
+                        ? Format(AppStrings.UpdateCheckFailed, reason)
+                        : Format(AppStrings.UpdateUpToDate, AppInfo.Current.VersionString);
+                    await MatrixDialog.ShowAsync(this, AppStrings.UpdateTitle, message, "OK");
+                }
+                return; // at launch, stay silent: up to date, or offline and we will look again next time
+            }
             if (!await MatrixDialog.ShowAsync(this, AppStrings.UpdateTitle, Format(AppStrings.UpdateMessage, release.Version.ToString(3)),
                     AppStrings.UpdateNow, AppStrings.UpdateLater))
                 return;
