@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:AuraMusic.Mobile.Controls"
+             xmlns:strings="clr-namespace:AuraMusic.Mobile.Resources.Strings"
+             x:Class="AuraMusic.Mobile.MainPage"
+             BackgroundColor="{StaticResource MatrixBackground}"
+             Shell.NavBarIsVisible="False">
+
+    <Grid>
+        <controls:MatrixRainView Opacity="0.35" />
+
+        <Grid RowDefinitions="*,Auto,Auto" Padding="20,40,20,28" RowSpacing="12">
+
+            <Button x:Name="LanguageButton"
+                    Style="{StaticResource MatrixButton}"
+                    HorizontalOptions="Start"
+                    VerticalOptions="Start"
+                    HeightRequest="46"
+                    Padding="14,0"
+                    SemanticProperties.Description="{x:Static strings:AppStrings.SwitchLanguageDescription}"
+                    Clicked="OnLanguageClicked" />
+
+            <Button Text="?"
+                    Style="{StaticResource MatrixButton}"
+                    HorizontalOptions="End"
+                    VerticalOptions="Start"
+                    WidthRequest="46"
+                    HeightRequest="46"
+                    Padding="0"
+                    SemanticProperties.Description="{x:Static strings:AppStrings.HelpDescription}"
+                    Clicked="OnHelpClicked" />
+
+            <VerticalStackLayout VerticalOptions="Center" Spacing="18">
+                <Image Source="splash_screen.png"
+                       HeightRequest="300"
+                       Aspect="AspectFit"
+                       HorizontalOptions="Center"
+                       SemanticProperties.Description="AuraMusic"
+                       SemanticProperties.HeadingLevel="Level1" />
+
+                <Border Style="{StaticResource MatrixPanelBorder}">
+                    <VerticalStackLayout Spacing="8">
+                        <Label x:Name="StatusLabel" Style="{StaticResource MatrixStatus}" />
+                        <Label x:Name="HintLabel" Style="{StaticResource MatrixBody}" />
+                    </VerticalStackLayout>
+                </Border>
+            </VerticalStackLayout>
+
+            <VerticalStackLayout x:Name="ModeButtons" Grid.Row="1" Spacing="12">
+                <Button Text="{x:Static strings:AppStrings.BroadcastButton}"
+                        Style="{StaticResource MatrixPrimaryButton}"
+                        Clicked="OnBroadcastClicked" />
+
+                <Button Text="{x:Static strings:AppStrings.ListenButton}"
+                        Style="{StaticResource MatrixButton}"
+                        Clicked="OnListenClicked" />
+            </VerticalStackLayout>
+
+            <Button x:Name="StopButton"
+                    Grid.Row="2"
+                    Text="{x:Static strings:AppStrings.StopButton}"
+                    Style="{StaticResource MatrixButton}"
+                    Clicked="OnStopClicked" />
+        </Grid>
+
+        <!-- Shown for 2 s at launch: Android 12+ only allows a tiny icon on the system splash. -->
+        <Grid x:Name="SplashOverlay" BackgroundColor="{StaticResource MatrixBackground}">
+            <Image Source="splash_screen.png"
+                   Aspect="AspectFit"
+                   Margin="20"
+                   SemanticProperties.Description="{x:Static strings:AppStrings.LogoDescription}" />
+        </Grid>
+    </Grid>
+
+</ContentPage>

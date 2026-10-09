@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+  </PropertyGroup>
+
+
+  <ItemGroup>
+    <EmbeddedResource Update="Resources\KernelStrings.resx"
+                      StronglyTypedLanguage="CSharp"
+                      StronglyTypedNamespace="AuraMusic.Kernel.Resources"
+                      StronglyTypedClassName="KernelStrings"
+                      StronglyTypedFileName="$(IntermediateOutputPath)KernelStrings.Designer.cs" />
+  </ItemGroup>
+</Project>

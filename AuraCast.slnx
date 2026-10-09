@@ -1,9 +1,0 @@
-<Solution>
-  <Folder Name="/src/">
-    <Project Path="src/AuraCast.Kernel/AuraCast.Kernel.csproj" />
-    <Project Path="src/AuraCast.Mobile/AuraCast.Mobile.csproj" />
-  </Folder>
-  <Folder Name="/tests/">
-    <Project Path="tests/AuraCast.Kernel.Tests/AuraCast.Kernel.Tests.csproj" />
-  </Folder>
-</Solution>

@@ -29,22 +29,22 @@ L'écran peut être éteint des deux côtés. La notification permet d'arrêter.
 
 - **Capture** : `AudioPlaybackCapture` (Android 10+) via MediaProjection, dans un service au premier plan.
 - **Transport** : Bluetooth Classic RFCOMM sans chiffrement applicatif, trouvé via un enregistrement SDP (`AuraProtocol.ServiceUuid`). Le BLE L2CAP a été essayé en premier mais plafonnait à ~14 kbps sur nos téléphones.
-- **Protocole** : un en-tête `AURA` + version, puis des paquets Opus préfixés par leur longueur (`src/AuraCast.Kernel/Protocol/AuraProtocol.cs`).
+- **Protocole** : un en-tête `AURA` + version, puis des paquets Opus préfixés par leur longueur (`src/AuraMusic.Kernel/Protocol/AuraProtocol.cs`).
 - **Lecture** : le décodage suit l'horloge de lecture. Un paquet en retard est comblé par la dissimulation de pertes d'Opus et le retard accumulé est rattrapé en sautant une trame.
 - **Plusieurs auditeurs** : chaque connexion a sa propre file d'envoi. En pratique, 3 ou 4 téléphones à 128 kbps (le Bluetooth classique accepte au plus 7 appareils connectés au master).
 
 ## Développement
 
 - .NET 11 / C# 15 (unions, `field`, collections frozen), MAUI Android uniquement (API 29+), codec Opus [Concentus](https://github.com/lostromb/concentus).
-- `src/AuraCast.Kernel` : la logique sans dépendance Android, testable.
+- `src/AuraMusic.Kernel` : la logique sans dépendance Android, testable.
   - `State/` : l'état de l'app, une union `AuraState` publiée par `AuraHub` ;
   - `Protocol/` : le format des données échangées ;
   - `Playout/` : `PlayoutController`, qui décide toutes les 20 ms de jouer, combler, sauter ou rebufferiser (une union `PlayoutStep`).
-- `src/AuraCast.Mobile` : l'app. Code Android dans `Platforms/Android/Casting/` (`BroadcastService` côté master, `ListenService` côté écoute).
-- `tests/AuraCast.Kernel.Tests` : tests unitaires xUnit v3 + Shouldly + Moq.
+- `src/AuraMusic.Mobile` : l'app. Code Android dans `Platforms/Android/Casting/` (`BroadcastService` côté master, `ListenService` côté écoute).
+- `tests/AuraMusic.Kernel.Tests` : tests unitaires xUnit v3 + Shouldly + Moq.
 
 ```sh
-dotnet test --project tests/AuraCast.Kernel.Tests
+dotnet test --project tests/AuraMusic.Kernel.Tests
 ```
 
 ### Déployer sur deux téléphones
@@ -52,8 +52,8 @@ dotnet test --project tests/AuraCast.Kernel.Tests
 `dotnet build -t:Run` n'installe pas sur le deuxième téléphone : il croit l'APK déjà installé. Il vaut mieux installer explicitement :
 
 ```sh
-dotnet build src/AuraCast.Mobile -f net11.0-android
-adb install -r src/AuraCast.Mobile/bin/Debug/net11.0-android/com.mafyou.auracast-Signed.apk
+dotnet build src/AuraMusic.Mobile -f net11.0-android
+adb install -r src/AuraMusic.Mobile/bin/Debug/net11.0-android/fr.mafyou.auramusic-Signed.apk
 ```
 
 ### Mesures

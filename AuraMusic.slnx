@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AuraMusic.Kernel/AuraMusic.Kernel.csproj" />
+    <Project Path="src/AuraMusic.Mobile/AuraMusic.Mobile.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AuraMusic.Kernel.Tests/AuraMusic.Kernel.Tests.csproj" />
+  </Folder>
+</Solution>
