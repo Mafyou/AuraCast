@@ -1,4 +1,4 @@
-﻿using AuraCast.Mobile.Core;
+﻿using AuraCast.Kernel.State;
 using AuraCast.Mobile.Casting;
 
 namespace AuraCast.Mobile

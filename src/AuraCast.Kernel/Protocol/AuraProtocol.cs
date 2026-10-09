@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 
-namespace AuraCast.Mobile.Core;
+namespace AuraCast.Kernel.Protocol;
 
 /// <summary>
 /// Wire format over the Bluetooth RFCOMM socket:

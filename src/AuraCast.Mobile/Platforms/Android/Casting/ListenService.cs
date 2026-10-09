@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Threading.Channels;
 using Android.App;
 using Android.Bluetooth;
@@ -6,7 +7,9 @@ using Android.Content.PM;
 using Android.Media;
 using Android.OS;
 using Android.Util;
-using AuraCast.Mobile.Core;
+using AuraCast.Kernel.Playout;
+using AuraCast.Kernel.Protocol;
+using AuraCast.Kernel.State;
 using Concentus;
 using AudioEncoding = Android.Media.Encoding;
 using Environment = System.Environment;
@@ -20,14 +23,12 @@ namespace AuraCast.Mobile.Casting;
 [Service(Exported = false, ForegroundServiceType = ForegroundService.TypeMediaPlayback)]
 public sealed class ListenService : Service
 {
-    // Jitter buffer, in 20 ms Opus packets: start playing with 100 ms in hand.
-    const int PrebufferFrames = 5;
-    // Late packets pile up behind concealed ones; past this backlog we skip one to stay in sync.
-    const int MaxBacklogFrames = PrebufferFrames + 3;
+    // Jitter buffer capacity, in 20 ms Opus packets; the playout policy lives in PlayoutController.
     const int MaxBufferedFrames = 15;
-    // A hiccup is concealed by Opus; a longer silence means the link stalled, so we rebuild the cushion.
-    const int MaxConcealedFrames = 10;
     static readonly TimeSpan LateGrace = TimeSpan.FromMilliseconds(10);
+
+    /// <summary>Paired devices that can be a master: phones, and tablets (which report themselves as computers).</summary>
+    static readonly FrozenSet<MajorDeviceClass> MasterDeviceClasses = [MajorDeviceClass.Phone, MajorDeviceClass.Computer];
     const string LastMasterKey = "lastMasterAddress";
 
     CancellationTokenSource? cts;
@@ -98,7 +99,7 @@ public sealed class ListenService : Service
     static BluetoothSocket? ConnectToMaster(BluetoothAdapter adapter, CancellationToken stoppingToken)
     {
         var phones = adapter.BondedDevices?
-            .Where(device => device.BluetoothClass?.MajorDeviceClass == MajorDeviceClass.Phone)
+            .Where(device => device.BluetoothClass is { } deviceClass && MasterDeviceClasses.Contains(deviceClass.MajorDeviceClass))
             .ToList() ?? [];
         if (phones.Count == 0)
             throw new InvalidOperationException("Appairez d'abord les deux téléphones dans les réglages Bluetooth.");
@@ -184,11 +185,11 @@ public sealed class ListenService : Service
         var decoder = OpusCodecFactory.CreateDecoder(AuraProtocol.SampleRate, AuraProtocol.Channels);
         var pcm = new short[AuraProtocol.FrameSamples * AuraProtocol.Channels];
 
+        var playout = new PlayoutController(stats);
         track.Play();
         try
         {
-            await Prebuffer(packets, stoppingToken);
-            int concealedInARow = 0;
+            await Prebuffer(packets, playout.PrebufferFrames, stoppingToken);
             while (!packets.Completion.IsCompleted)
             {
                 if (!packets.TryRead(out var packet))
@@ -198,28 +199,20 @@ public sealed class ListenService : Service
                     packets.TryRead(out packet);
                 }
 
-                if (packet is null)
+                switch (playout.Next(packet, packets.Count))
                 {
-                    if (++concealedInARow > MaxConcealedFrames)
-                    {
-                        stats.Rebuffers++;
-                        concealedInARow = 0;
-                        await Prebuffer(packets, stoppingToken);
+                    case Play(var data):
+                        decoder.Decode(data, pcm, AuraProtocol.FrameSamples);
+                        break;
+                    case Conceal:
+                        decoder.Decode(ReadOnlySpan<byte>.Empty, pcm, AuraProtocol.FrameSamples);
+                        break;
+                    case Skip(var data):
+                        decoder.Decode(data, pcm, AuraProtocol.FrameSamples);
                         continue;
-                    }
-                    stats.Concealed++;
-                    decoder.Decode(ReadOnlySpan<byte>.Empty, pcm, AuraProtocol.FrameSamples);
-                }
-                else
-                {
-                    concealedInARow = 0;
-                    decoder.Decode(packet, pcm, AuraProtocol.FrameSamples);
-                    if (packets.Count > MaxBacklogFrames)
-                    {
-                        // Decoded (keeps the decoder state right) but not played: catch up 20 ms.
-                        stats.Skipped++;
+                    case Rebuffer:
+                        await Prebuffer(packets, playout.PrebufferFrames, stoppingToken);
                         continue;
-                    }
                 }
 
                 track.Write(pcm, 0, pcm.Length); // blocking: paces the loop to the playback clock
@@ -232,17 +225,24 @@ public sealed class ListenService : Service
         }
     }
 
-    static async Task Prebuffer(ChannelReader<byte[]> packets, CancellationToken stoppingToken)
+    static async Task Prebuffer(ChannelReader<byte[]> packets, int frames, CancellationToken stoppingToken)
     {
-        while (packets.Count < PrebufferFrames && !packets.Completion.IsCompleted)
+        while (packets.Count < frames && !packets.Completion.IsCompleted)
             await Task.Delay(5, stoppingToken);
     }
 
-    sealed class ReceiveStats
+    sealed class ReceiveStats : IPlayoutMetrics
     {
         long windowStart = Environment.TickCount64;
         int frames, bytes;
-        public int Concealed, Skipped, Rebuffers, Dropped;
+        int concealed, skipped, rebuffers;
+        public int Dropped;
+
+        public void Concealed() => concealed++;
+
+        public void Skipped() => skipped++;
+
+        public void Rebuffered() => rebuffers++;
 
         public void Received(int packetBytes)
         {
@@ -254,9 +254,9 @@ public sealed class ListenService : Service
 
             // 50 frames/s means the link keeps up with real time.
             Log.Info(AuraLog.Tag, $"rx {frames * 1000.0 / elapsed:F1} frames/s, {bytes * 8.0 / elapsed:F0} kbps, "
-                + $"concealed {Concealed}, skipped {Skipped}, rebuffers {Rebuffers}, dropped {Dropped}");
+                + $"concealed {concealed}, skipped {skipped}, rebuffers {rebuffers}, dropped {Dropped}");
             windowStart = Environment.TickCount64;
-            frames = bytes = Concealed = Skipped = Rebuffers = Dropped = 0;
+            frames = bytes = concealed = skipped = rebuffers = Dropped = 0;
         }
     }
 

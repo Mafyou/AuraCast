@@ -1,6 +1,6 @@
 using Android.App;
 using Android.Content;
-using AuraCast.Mobile.Core;
+using AuraCast.Kernel.State;
 
 namespace AuraCast.Mobile.Casting;
 

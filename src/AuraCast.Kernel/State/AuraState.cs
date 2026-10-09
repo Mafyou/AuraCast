@@ -1,4 +1,4 @@
-namespace AuraCast.Mobile.Core;
+namespace AuraCast.Kernel.State;
 
 public sealed record Idle;
 public sealed record Advertising;
@@ -12,13 +12,17 @@ public union AuraState(Idle, Advertising, Streaming, Searching, Listening, Faile
 /// <summary>Single source of truth for the streaming state, shared between the services and the UI.</summary>
 public static class AuraHub
 {
-    public static AuraState Current { get; private set; } = new Idle();
-
     public static event Action<AuraState>? StateChanged;
 
-    public static void Publish(AuraState state)
+    public static AuraState Current
     {
-        Current = state;
-        StateChanged?.Invoke(state);
-    }
+        get;
+        private set
+        {
+            field = value;
+            StateChanged?.Invoke(value);
+        }
+    } = new Idle();
+
+    public static void Publish(AuraState state) => Current = state;
 }
