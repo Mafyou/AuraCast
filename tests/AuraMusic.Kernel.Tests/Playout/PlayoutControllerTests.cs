@@ -8,8 +8,10 @@ public sealed class PlayoutControllerTests
     // Expression trees (ShouldAllBe) cannot hold an 'is' pattern.
     static bool IsConceal(PlayoutStep step) => step is Conceal;
 
+    static bool IsCatchUp(PlayoutStep step) => step is CatchUp;
+
     PlayoutController CreateController() =>
-        new(metrics.Object) { CatchUpAboveFrames = 4, MaxBacklogFrames = 8, MaxConcealedFrames = 3 };
+        new(metrics.Object) { CatchUpAboveFrames = 4, CatchUpEveryFrames = 1, MaxBacklogFrames = 8, MaxConcealedFrames = 3 };
 
     [Fact]
     public void Next_PacketOnTime_PlaysIt()
@@ -109,13 +111,34 @@ public sealed class PlayoutControllerTests
     }
 
     [Fact]
-    public void Defaults_StartWith120MsInHand_CatchUpPast160Ms_SkipOnlyPast400Ms()
+    public void Defaults_RideOutStalls_AndNeverSoundMetallic()
     {
         var controller = new PlayoutController(metrics.Object);
 
-        controller.PrebufferFrames.ShouldBe(6);
-        controller.CatchUpAboveFrames.ShouldBe(8);
-        controller.MaxBacklogFrames.ShouldBe(20);
+        controller.PrebufferFrames.ShouldBe(10);     // 200 ms in hand
+        controller.CatchUpAboveFrames.ShouldBe(16);  // catch up past 320 ms
+        controller.CatchUpEveryFrames.ShouldBe(5);   // 1 ms per 100 ms
+        controller.MaxBacklogFrames.ShouldBe(30);    // drop only past 600 ms
+        controller.MaxConcealedFrames.ShouldBe(4);   // 80 ms of concealment at most
+    }
+
+    [Fact]
+    public void Next_CatchingUp_ShortensOnlyOnePacketInFive()
+    {
+        var controller = new PlayoutController(metrics.Object) { CatchUpAboveFrames = 4, CatchUpEveryFrames = 5, MaxBacklogFrames = 50 };
+
+        var steps = Enumerable.Range(0, 10).Select(_ => controller.Next(packet, backlog: 10)).ToList();
+
+        steps.Count(step => IsCatchUp(step)).ShouldBe(2);
+        (steps[0] is CatchUp).ShouldBeTrue();
+        (steps[5] is CatchUp).ShouldBeTrue();
+        metrics.Verify(m => m.CaughtUp(), Times.Exactly(2));
+    }
+
+    [Fact]
+    public void CatchUpEveryFrames_NotPositive_Throws()
+    {
+        Should.Throw<ArgumentOutOfRangeException>(() => new PlayoutController(metrics.Object) { CatchUpEveryFrames = 0 });
     }
 
     [Theory]

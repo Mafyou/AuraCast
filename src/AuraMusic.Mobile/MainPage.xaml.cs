@@ -45,7 +45,7 @@
 
         void OnStateChanged(AuraState state) => MainThread.BeginInvokeOnMainThread(() => Render(state));
 
-        void OnSpectrum(float[] levels) => MainThread.BeginInvokeOnMainThread(() => Spectrum.Push(levels));
+        void OnSpectrum(float[] levels) => Spectrum.Post(levels);
 
         void Render(AuraState state)
         {

@@ -5,38 +5,52 @@ namespace AuraMusic.Kernel.Playout;
 /// </summary>
 public sealed class PlayoutController(IPlayoutMetrics metrics)
 {
-    /// <summary>Packets to have in hand before (re)starting playback.</summary>
+    /// <summary>Packets to have in hand before (re)starting playback: enough to ride out a Bluetooth stall.</summary>
     public int PrebufferFrames
     {
         get;
         init => field = value > 0 ? value : throw new ArgumentOutOfRangeException(nameof(PrebufferFrames), value, "Must be positive.");
-    } = 6;
+    } = 10;
 
     /// <summary>
-    /// Above this backlog we are lagging a bit: packets are played slightly shorter until we are back on time.
-    /// Keep it a little above <see cref="PrebufferFrames"/> so normal jitter does not trigger it.
+    /// Above this backlog we are lagging: some packets are played slightly shorter until we are back on time.
+    /// Keep it well above <see cref="PrebufferFrames"/> so normal jitter does not trigger it.
     /// </summary>
     public int CatchUpAboveFrames
     {
         get;
         init => field = value >= 0 ? value : throw new ArgumentOutOfRangeException(nameof(CatchUpAboveFrames), value, "Cannot be negative.");
-    } = 8;
+    } = 16;
+
+    /// <summary>
+    /// Shorten at most one packet in this many: splicing every packet is heard as a sped-up, metallic sound,
+    /// one in five (1 ms per 100 ms) is not.
+    /// </summary>
+    public int CatchUpEveryFrames
+    {
+        get;
+        init => field = value > 0 ? value : throw new ArgumentOutOfRangeException(nameof(CatchUpEveryFrames), value, "Must be positive.");
+    } = 5;
 
     /// <summary>Last resort, far behind (the link stalled then burst): a packet is dropped outright.</summary>
     public int MaxBacklogFrames
     {
         get;
         init => field = value >= 0 ? value : throw new ArgumentOutOfRangeException(nameof(MaxBacklogFrames), value, "Cannot be negative.");
-    } = 20;
+    } = 30;
 
-    /// <summary>A hiccup is concealed; more consecutive missing packets than this means the link stalled.</summary>
+    /// <summary>
+    /// Concealment past a few tens of milliseconds sounds metallic: beyond this many missing packets in a row,
+    /// go silent and rebuild the cushion instead.
+    /// </summary>
     public int MaxConcealedFrames
     {
         get;
         init => field = value >= 0 ? value : throw new ArgumentOutOfRangeException(nameof(MaxConcealedFrames), value, "Cannot be negative.");
-    } = 10;
+    } = 4;
 
     int concealedInARow;
+    int sinceCatchUp = int.MaxValue / 2;
 
     /// <param name="packet">The next packet, or <see langword="null"/> when it did not arrive in time.</param>
     /// <param name="backlog">Packets still waiting in the jitter buffer after this one.</param>
@@ -55,13 +69,15 @@ public sealed class PlayoutController(IPlayoutMetrics metrics)
         }
 
         concealedInARow = 0;
+        sinceCatchUp++;
         if (backlog > MaxBacklogFrames)
         {
             metrics.Skipped();
             return new Skip(packet);
         }
-        if (backlog > CatchUpAboveFrames)
+        if (backlog > CatchUpAboveFrames && sinceCatchUp >= CatchUpEveryFrames)
         {
+            sinceCatchUp = 0;
             metrics.CaughtUp();
             return new CatchUp(packet);
         }

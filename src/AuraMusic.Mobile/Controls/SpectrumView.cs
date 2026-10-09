@@ -2,11 +2,13 @@ namespace AuraMusic.Mobile.Controls;
 
 /// <summary>
 /// Matrix-style spectrum: one column of glyphs per frequency band, lit from the bottom up.
-/// Feed it with <see cref="Push"/> on the UI thread.
+/// Feed it with <see cref="Post"/> from any thread.
 /// </summary>
 public sealed class SpectrumView : GraphicsView
 {
     readonly SpectrumDrawable spectrum = new();
+    float[]? latest;
+    int redrawQueued;
 
     public SpectrumView()
     {
@@ -14,10 +16,25 @@ public sealed class SpectrumView : GraphicsView
         InputTransparent = true;
     }
 
-    public void Push(float[] levels)
+    /// <summary>
+    /// Safe from any thread. Only the newest levels are kept and at most one redraw is queued, so a slow
+    /// phone shows the music one frame late at worst instead of falling further and further behind.
+    /// </summary>
+    public void Post(float[] levels)
     {
-        spectrum.Push(levels);
-        Invalidate();
+        Volatile.Write(ref latest, levels);
+        if (Interlocked.Exchange(ref redrawQueued, 1) == 0)
+            Dispatcher.Dispatch(DrawLatest);
+    }
+
+    void DrawLatest()
+    {
+        Volatile.Write(ref redrawQueued, 0);
+        if (Interlocked.Exchange(ref latest, null) is { } levels)
+        {
+            spectrum.Push(levels);
+            Invalidate();
+        }
     }
 
     public void Clear()

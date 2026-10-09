@@ -15,7 +15,7 @@ public sealed class MatrixRainView : GraphicsView
         InputTransparent = true;
 
         timer = Dispatcher.CreateTimer();
-        timer.Interval = TimeSpan.FromMilliseconds(66);
+        timer.Interval = TimeSpan.FromMilliseconds(80); // a background: 12 fps is plenty and spares slower phones
         timer.Tick += (_, _) =>
         {
             rain.Step();
@@ -27,8 +27,8 @@ public sealed class MatrixRainView : GraphicsView
 
     sealed class MatrixRain : IDrawable
     {
-        const float CellSize = 20;
-        const int TrailLength = 18;
+        const float CellSize = 24;
+        const int TrailLength = 12;
 
         static readonly string[] Glyphs = [.. "ｦｱｳｴｵｶｷｹｺｻｼｽｾｿﾀﾂﾃﾅﾆﾇﾈﾊﾋﾎﾏﾐﾑﾒﾓﾔﾕﾗﾘﾜ0123456789:=*+<>".Select(glyph => glyph.ToString())];
         static readonly Color Head = Color.FromArgb("#C8FFE0");

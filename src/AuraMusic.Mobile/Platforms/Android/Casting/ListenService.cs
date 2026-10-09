@@ -8,7 +8,8 @@ namespace AuraMusic.Mobile.Casting;
 public sealed class ListenService : Service
 {
     // Jitter buffer capacity, in 20 ms Opus packets; the playout policy lives in PlayoutController.
-    const int MaxBufferedFrames = 15;
+    // Room for the burst that follows a Bluetooth stall (800 ms): a smaller channel drops those packets.
+    const int MaxBufferedFrames = 40;
     // Most of the cushion sits in the AudioTrack, not in the channel: a late packet is waited for until the
     // AudioTrack is about to run dry, and only then concealed.
     const int LowWaterFrames = AuraProtocol.SampleRate / 50; // 20 ms
@@ -185,6 +186,8 @@ public sealed class ListenService : Service
 
         var playout = new PlayoutController(stats);
         var analyzer = new SpectrumAnalyzer(SpectrumHub.Bands, AuraProtocol.SampleRate, AuraProtocol.Channels);
+        // Levels wait here until their audio actually comes out of the speaker, so the visualizer is in sync.
+        var pendingLevels = new Queue<(uint PlayedAt, float[] Levels)>();
         uint written = 0; // sample frames handed to the AudioTrack; wraps like its playback head
         track.Play();
         try
@@ -223,8 +226,11 @@ public sealed class ListenService : Service
                 {
                     var levels = new float[SpectrumHub.Bands];
                     analyzer.Analyze(pcm.AsSpan(0, length), levels);
-                    SpectrumHub.Publish(levels);
+                    pendingLevels.Enqueue((written, levels));
                 }
+                uint played = (uint)track.PlaybackHeadPosition;
+                while (pendingLevels.TryPeek(out var next) && (int)(played - next.PlayedAt) >= 0)
+                    SpectrumHub.Publish(pendingLevels.Dequeue().Levels);
             }
         }
         finally
