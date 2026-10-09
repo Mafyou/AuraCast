@@ -56,7 +56,7 @@ jobs:
           -p:ApplicationVersion=${{ github.run_number }}
           -p:AndroidKeyStore=true
           -p:AndroidSigningKeyStore="$RUNNER_TEMP/auracast.keystore"
-          -p:AndroidSigningKeyAlias=auracast
+          -p:AndroidSigningKeyAlias=mafyou
           -p:AndroidSigningStorePass=env:KEYSTORE_PASSWORD
           -p:AndroidSigningKeyPass=env:KEYSTORE_PASSWORD
 

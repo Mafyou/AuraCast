@@ -75,4 +75,4 @@ Pousser un tag `v*` sur `main` déclenche [le workflow de release](.github/workf
 git tag v1.0.0 && git push origin v1.0.0
 ```
 
-Le workflow a besoin de deux secrets du dépôt : `ANDROID_KEYSTORE_BASE64` (le keystore, alias `auracast`, encodé en base64) et `ANDROID_KEYSTORE_PASSWORD`. Toutes les versions doivent être signées avec la même clé, sinon Android refuse d'installer la mise à jour.
+Le workflow a besoin de deux secrets du dépôt : `ANDROID_KEYSTORE_BASE64` (le keystore, alias `mafyou`, encodé en base64) et `ANDROID_KEYSTORE_PASSWORD`. Toutes les versions doivent être signées avec la même clé, sinon Android refuse d'installer la mise à jour.
