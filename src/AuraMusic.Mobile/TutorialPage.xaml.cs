@@ -21,7 +21,12 @@ namespace AuraMusic.Mobile
             Steps.ItemsSource = All;
         }
 
+        readonly TaskCompletionSource closed = new();
+
         public static bool HasBeenSeen => Preferences.Get(SeenKey, false);
+
+        /// <summary>Completes once the tutorial has been dismissed.</summary>
+        public Task Closed => closed.Task;
 
         void OnPositionChanged(object? sender, PositionChangedEventArgs e) =>
             NextButton.Text = e.CurrentPosition == All.Length - 1 ? AppStrings.TutorialDone : AppStrings.TutorialNext;
@@ -40,6 +45,7 @@ namespace AuraMusic.Mobile
         {
             Preferences.Set(SeenKey, true);
             await Navigation.PopModalAsync();
+            closed.TrySetResult();
         }
     }
 }

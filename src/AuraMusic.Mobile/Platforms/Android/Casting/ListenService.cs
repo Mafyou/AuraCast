@@ -161,8 +161,8 @@ public sealed class ListenService : Service
     static void Play(ChannelReader<byte[]> packets, ReceiveStats stats, CancellationToken stoppingToken)
     {
         // A late wake-up of this thread starves the AudioTrack, which is heard as crackling:
-        // run it at Android's audio priority, like any music player.
-        global::Android.OS.Process.SetThreadPriority(global::Android.OS.ThreadPriority.UrgentAudio);
+        // run it at Android's audio priority, like any music player (not urgent-audio, which is the mixer's).
+        global::Android.OS.Process.SetThreadPriority(global::Android.OS.ThreadPriority.Audio);
 
         // Float output: codec overshoots cannot clip, and it is what the Android mixer works in anyway.
         int minBuffer = AudioTrack.GetMinBufferSize(AuraProtocol.SampleRate, ChannelOut.Stereo, AudioEncoding.PcmFloat);

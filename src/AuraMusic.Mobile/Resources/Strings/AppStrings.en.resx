@@ -51,6 +51,7 @@
   <data name="UpdateNow" xml:space="preserve"><value>Update</value></data>
   <data name="UpdateLater" xml:space="preserve"><value>Later</value></data>
   <data name="UpdateDownloading" xml:space="preserve"><value>&gt; downloading {0:P0}</value></data>
-  <data name="UpdateAllowInstall" xml:space="preserve"><value>Allow AuraMusic to install apps, then restart the app to update.</value></data>
+  <data name="UpdateAllowInstall" xml:space="preserve"><value>Android must allow AuraMusic to install apps. Turn on “Allow from this source”, then come back here: the installation starts on its own.</value></data>
   <data name="UpdateFailed" xml:space="preserve"><value>The update failed: {0}</value></data>
+  <data name="UpdateOpenSettings" xml:space="preserve"><value>Open settings</value></data>
 </root>

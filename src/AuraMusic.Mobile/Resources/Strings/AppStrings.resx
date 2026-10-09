@@ -51,6 +51,7 @@
   <data name="UpdateNow" xml:space="preserve"><value>Mettre à jour</value></data>
   <data name="UpdateLater" xml:space="preserve"><value>Plus tard</value></data>
   <data name="UpdateDownloading" xml:space="preserve"><value>&gt; téléchargement {0:P0}</value></data>
-  <data name="UpdateAllowInstall" xml:space="preserve"><value>Autorise AuraMusic à installer des applis, puis relance l'app pour mettre à jour.</value></data>
+  <data name="UpdateAllowInstall" xml:space="preserve"><value>Android doit autoriser AuraMusic à installer des applis. Active « Autoriser depuis cette source », puis reviens ici : l'installation démarrera toute seule.</value></data>
   <data name="UpdateFailed" xml:space="preserve"><value>La mise à jour a échoué : {0}</value></data>
+  <data name="UpdateOpenSettings" xml:space="preserve"><value>Ouvrir les réglages</value></data>
 </root>

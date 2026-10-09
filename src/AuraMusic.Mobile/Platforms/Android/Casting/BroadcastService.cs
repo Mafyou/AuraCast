@@ -15,6 +15,13 @@ public sealed class BroadcastService : Service
     MediaProjection? projection;
     AudioRecord? recorder;
     Thread? captureThread;
+
+    // About a third of the CPU of complexity 10, so no phone falls behind; the difference is not audible.
+    const int EncoderComplexity = 5;
+
+    // Up to 500 ms of captured audio waiting for the encoder; past that the oldest is dropped.
+    readonly Channel<short[]> toEncode = Channel.CreateBounded<short[]>(
+        new BoundedChannelOptions(25) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true, SingleWriter = true });
     BluetoothServerSocket? server;
 
     public override IBinder? OnBind(Intent? intent) => null;
@@ -65,8 +72,9 @@ public sealed class BroadcastService : Service
         cts = new CancellationTokenSource();
         var stoppingToken = cts.Token;
         _ = Task.Run(() => AcceptLoop(stoppingToken));
-        captureThread = new Thread(() => CaptureLoop(stoppingToken)) { IsBackground = true, Name = "AuraMusic capture", Priority = System.Threading.ThreadPriority.Highest };
+        captureThread = new Thread(() => CaptureLoop(stoppingToken)) { IsBackground = true, Name = "AuraMusic capture" };
         captureThread.Start();
+        _ = Task.Run(() => EncodeLoop(stoppingToken));
 
         AuraHub.Publish(new Advertising());
     }
@@ -139,28 +147,25 @@ public sealed class BroadcastService : Service
 
     void CaptureLoop(CancellationToken stoppingToken)
     {
-        // Same as playback: never let the capture fall behind the audio clock.
-        global::Android.OS.Process.SetThreadPriority(global::Android.OS.ThreadPriority.UrgentAudio);
+        // Audio priority keeps the capture on time, but not urgent-audio: that one belongs to Android's own
+        // mixer and to the music app, which must never be starved by us.
+        global::Android.OS.Process.SetThreadPriority(global::Android.OS.ThreadPriority.Audio);
 
-        var encoder = OpusCodecFactory.CreateEncoder(AuraProtocol.SampleRate, AuraProtocol.Channels, OpusApplication.OPUS_APPLICATION_AUDIO);
-        encoder.Bitrate = AuraProtocol.Bitrate;
-        encoder.Complexity = 10;
-        encoder.SignalType = OpusSignal.OPUS_SIGNAL_MUSIC;
-        encoder.MaxBandwidth = OpusBandwidth.OPUS_BANDWIDTH_FULLBAND; // never trade away the highs
-
-        var pcm = new short[AuraProtocol.FrameSamples * AuraProtocol.Channels];
-        var packet = new byte[AuraProtocol.MaxPacketSize];
         var analyzer = new SpectrumAnalyzer(SpectrumHub.Bands, AuraProtocol.SampleRate, AuraProtocol.Channels);
         int captured = 0;
 
         recorder!.StartRecording();
         while (!stoppingToken.IsCancellationRequested)
         {
+            var pcm = new short[AuraProtocol.FrameSamples * AuraProtocol.Channels];
             for (int read = 0; read < pcm.Length;)
             {
                 int count = recorder.Read(pcm, read, pcm.Length - read);
                 if (count <= 0)
+                {
+                    toEncode.Writer.TryComplete();
                     return; // stopped, or the recorder died
+                }
                 read += count;
             }
 
@@ -171,16 +176,52 @@ public sealed class BroadcastService : Service
                 SpectrumHub.Publish(levels);
             }
 
+            bool anyListener;
+            lock (listeners)
+                anyListener = listeners.Count > 0;
+            if (anyListener)
+                toEncode.Writer.TryWrite(pcm);
+        }
+        toEncode.Writer.TryComplete();
+    }
+
+    /// <summary>
+    /// Encoding is the heavy part: it runs at normal priority, so if the phone is busy only the listeners
+    /// may hiccup, never the sound of the phone itself.
+    /// </summary>
+    async Task EncodeLoop(CancellationToken stoppingToken)
+    {
+        var encoder = OpusCodecFactory.CreateEncoder(AuraProtocol.SampleRate, AuraProtocol.Channels, OpusApplication.OPUS_APPLICATION_AUDIO);
+        encoder.Bitrate = AuraProtocol.Bitrate;
+        encoder.Complexity = EncoderComplexity;
+        encoder.SignalType = OpusSignal.OPUS_SIGNAL_MUSIC;
+        encoder.MaxBandwidth = OpusBandwidth.OPUS_BANDWIDTH_FULLBAND; // never trade away the highs
+
+        var packet = new byte[AuraProtocol.MaxPacketSize];
+        long windowStart = Environment.TickCount64;
+        var encoding = TimeSpan.Zero;
+        int frames = 0;
+        await foreach (var pcm in toEncode.Reader.ReadAllAsync(stoppingToken))
+        {
+            long started = Stopwatch.GetTimestamp();
+            int length = encoder.Encode(pcm, AuraProtocol.FrameSamples, packet, packet.Length);
+            encoding += Stopwatch.GetElapsedTime(started);
+
+            var frame = packet.AsSpan(0, length).ToArray();
             ListenerLink[] targets;
             lock (listeners)
                 targets = [.. listeners];
-            if (targets.Length == 0)
-                continue;
-
-            int length = encoder.Encode(pcm, AuraProtocol.FrameSamples, packet, packet.Length);
-            var frame = packet.AsSpan(0, length).ToArray();
             foreach (var target in targets)
                 target.Enqueue(frame);
+
+            if (++frames > 0 && Environment.TickCount64 - windowStart >= 5_000)
+            {
+                // Must stay well under 20 ms per frame, or the listeners fall behind.
+                Log.Info(AuraLog.Tag, $"encode {encoding.TotalMilliseconds / frames:F1} ms/frame, backlog {toEncode.Reader.Count}");
+                windowStart = Environment.TickCount64;
+                encoding = TimeSpan.Zero;
+                frames = 0;
+            }
         }
     }
 

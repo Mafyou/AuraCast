@@ -28,8 +28,13 @@
             SplashOverlay.IsVisible = false;
 
             if (!TutorialPage.HasBeenSeen && Navigation.ModalStack.Count == 0)
-                await Navigation.PushModalAsync(new TutorialPage());
-            else if (!updateOffered)
+            {
+                var tutorial = new TutorialPage();
+                await Navigation.PushModalAsync(tutorial);
+                await tutorial.Closed; // a first launch must be offered updates too, once the tutorial is done
+            }
+
+            if (!updateOffered)
             {
                 updateOffered = true;
                 await OfferUpdateAsync();
@@ -86,10 +91,13 @@
             var progress = new Progress<double>(done => StatusLabel.Text = Format(AppStrings.UpdateDownloading, done));
             try
             {
-                if (!await AppUpdater.DownloadAndInstallAsync(release, progress, CancellationToken.None))
-                    await MatrixDialog.ShowAsync(this, AppStrings.UpdateTitle, AppStrings.UpdateAllowInstall, "OK");
+                var apk = await AppUpdater.DownloadAsync(release, progress, CancellationToken.None);
+                if (AppUpdater.CanInstall)
+                    AppUpdater.Install(apk);
+                else if (await MatrixDialog.ShowAsync(this, AppStrings.UpdateTitle, AppStrings.UpdateAllowInstall, AppStrings.UpdateOpenSettings))
+                    AppUpdater.InstallWhenAllowed(apk); // resumed by App.OnResume when the user comes back
             }
-            catch (Exception ex) when (ex is HttpRequestException or IOException)
+            catch (Exception ex) when (ex is HttpRequestException or IOException or Java.Lang.Exception)
             {
                 await MatrixDialog.ShowAsync(this, AppStrings.UpdateTitle, Format(AppStrings.UpdateFailed, ex.Message), "OK");
             }

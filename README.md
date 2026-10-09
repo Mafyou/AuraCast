@@ -3,7 +3,7 @@
 Partage le son d'un téléphone Android avec d'autres téléphones Android, en Bluetooth, sans Wi-Fi ni internet.
 Une alternative maison à LE Audio Auracast pour les téléphones qui ne le supportent pas.
 
-Le téléphone **master** joue sa musique (YouTube Music, Spotify, n'importe quelle app) et les téléphones qui **écoutent** entendent la même chose, avec un léger décalage (environ 120 ms de tampon plus la latence Bluetooth).
+Le téléphone **master** joue sa musique (YouTube Music, Spotify, n'importe quelle app) et les téléphones qui **écoutent** entendent la même chose, avec un léger décalage (environ 200 ms de tampon plus la latence Bluetooth).
 
 ## Utilisation
 
@@ -20,7 +20,7 @@ L'écran peut être éteint des deux côtés. La notification permet d'arrêter.
  App musicale ─► AudioPlaybackCapture               Téléphones appairés → connexion RFCOMM
                  PCM 48 kHz stéréo                        │
                       │                                   ▼
-                 Encodeur Opus 256 kbps             Tampon d'environ 120 ms
+                 Encodeur Opus 96 kbps              Tampon d'environ 200 ms
                  (trames de 20 ms)                        │
                       │                                   ▼
                  Serveur RFCOMM  ───── Bluetooth ───►  Décodeur Opus ─► AudioTrack 🎧
@@ -32,7 +32,7 @@ L'écran peut être éteint des deux côtés. La notification permet d'arrêter.
 - **Protocole** : un en-tête `AURA` + version, puis des paquets Opus préfixés par leur longueur (`src/AuraMusic.Kernel/Protocol/AuraProtocol.cs`).
 - **Lecture** : le décodage suit l'horloge de lecture. Un paquet en retard est comblé par la dissimulation de pertes d'Opus et le retard accumulé est rattrapé en sautant une trame.
 - **Lecture** : thread en priorité audio Android, sortie en virgule flottante. Un paquet en retard n'est comblé (dissimulation d'Opus) que si la sortie audio va manquer de son ; un retard accumulé est rattrapé en raccourcissant les trames de 1 ms avec un fondu, sans clic.
-- **Plusieurs auditeurs** : chaque connexion a sa propre file d'envoi. En pratique, 2 ou 3 téléphones à 256 kbps (le Bluetooth classique accepte au plus 7 appareils connectés au master).
+- **Plusieurs auditeurs** : chaque connexion a sa propre file d'envoi. À 96 kbps, la liaison garde de la marge pour plusieurs téléphones (le Bluetooth classique accepte au plus 7 appareils connectés au master).
 - **Spectre** : pendant la diffusion ou l'écoute, 16 bandes de fréquences façon Matrix (FFT maison dans le Kernel).
 - **Mises à jour** : au lancement, l'app compare sa version à la dernière release GitHub et propose d'installer la nouvelle (même clé de signature : installation par-dessus, réglages conservés).
 
