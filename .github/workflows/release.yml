@@ -64,6 +64,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp publish/com.mafyou.auracast-Signed.apk "AuraCast-$GITHUB_REF_NAME.apk"
-          gh release create "$GITHUB_REF_NAME" "AuraCast-$GITHUB_REF_NAME.apk" \
-            --title "AuraCast $GITHUB_REF_NAME" --generate-notes
+          cp publish/com.mafyou.auracast-Signed.apk "AuraMusic-$GITHUB_REF_NAME.apk"
+          gh release create "$GITHUB_REF_NAME" "AuraMusic-$GITHUB_REF_NAME.apk" \
+            --title "AuraMusic $GITHUB_REF_NAME" --generate-notes
