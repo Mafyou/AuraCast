@@ -83,9 +83,13 @@ adb logcat -s AuraMusic
 
 50 trames/s veut dire que la liaison suit le temps réel.
 
+### Intégration continue
+
+`main` est protégée : tout passe par une pull request. Sur chacune, [le workflow de vérification](.github/workflows/pr.yml) lance les tests du Kernel et compile l'app Android en Release, **warnings traités comme des erreurs** ; les deux doivent être au vert pour fusionner.
+
 ### Release
 
-Rien ne tourne tout seul : ni sur un push, ni sur une pull request. Une version se publie à la main depuis [le workflow](.github/workflows/ci.yml), sur `main` : **Actions › Release AuraMusic APK › Run workflow**, en donnant le numéro de version, ou :
+Une version ne se publie qu'à la main, depuis [le workflow de release](.github/workflows/ci.yml), sur `main` : **Actions › Release AuraMusic APK › Run workflow**, en donnant le numéro de version, ou :
 
 ```sh
 gh workflow run ci.yml --ref main -f version=1.7.0
