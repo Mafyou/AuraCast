@@ -50,4 +50,15 @@ public sealed class DriftController(int nominalRate)
 
     /// <summary>After a rebuffer the level starts afresh; what was learnt about the clocks is kept.</summary>
     public void Restart() => primed = false;
+
+    /// <summary>
+    /// The buffer ran dry while playing: whatever said "play faster" was wrong. Forget it, so a level that reads
+    /// too high (or a target set too low) cannot keep draining the buffer.
+    /// </summary>
+    public void RanDry()
+    {
+        integral = Math.Min(integral, 0);
+        Correction = Math.Min(Correction, 0);
+        primed = false;
+    }
 }

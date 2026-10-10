@@ -112,6 +112,32 @@ public sealed class DriftControllerTests
     }
 
     [Fact]
+    public void RanDry_StopsPlayingFaster()
+    {
+        var controller = Controller();
+        for (int i = 0; i < 5_000; i++)
+            controller.Update(400); // long convinced there is too much in hand
+
+        controller.RanDry();
+
+        controller.Correction.ShouldBe(0);
+        controller.Update(200).ShouldBe(Nominal);
+    }
+
+    [Fact]
+    public void RanDry_KeepsPlayingSlower()
+    {
+        var controller = Controller();
+        for (int i = 0; i < 5_000; i++)
+            controller.Update(100);
+        double slower = controller.Correction;
+
+        controller.RanDry();
+
+        controller.Correction.ShouldBe(slower);
+    }
+
+    [Fact]
     public void Restart_ForgetsTheOldLevelNotTheTarget()
     {
         var controller = Controller();

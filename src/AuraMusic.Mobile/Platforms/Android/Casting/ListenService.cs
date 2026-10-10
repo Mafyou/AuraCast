@@ -387,17 +387,21 @@ public sealed class ListenService : Service
         // Only a small, known share of the latency lives in the output: the rest is the jitter buffer, which
         // the sync setting and the drift controller can then actually steer.
         track.SetBufferSizeInFrames(outputShareFrames);
+        // What the phone granted, which may be more than asked: everything below is planned around it.
+        int outputMs = track.BufferSizeInFrames * 1000 / AuraProtocol.SampleRate;
+        Log.Info(AuraLog.Tag, $"output buffer: {outputMs} ms (asked {PlayoutTuning.OutputShareMs})");
 
         using var decoder = OpusCodec.CreateDecoder(AuraProtocol.SampleRate, AuraProtocol.Channels);
         Log.Info(AuraLog.Tag, decoder.IsNative ? "decoder: libopus" : "decoder: managed fallback (libopus did not load)");
         stats.NativeCodec = decoder.IsNative;
         var pcm = new float[AuraProtocol.FrameSamples * AuraProtocol.Channels];
 
-        int latency = PlayoutTuning.TargetLatencyMs;
+        int latency = PlayoutTuning.LatencyFor(stats.Links);
+        int reachable = PlayoutTuning.ReachableLatencyMs(latency, outputMs);
         var playout = new PlayoutController(stats);
-        playout.SetCushion(PlayoutTuning.CushionFrames(latency));
+        playout.SetCushion(PlayoutTuning.CushionFrames(latency, outputMs));
         // Plays a hair faster or slower so the buffer stays on target despite the two phones' clocks differing.
-        var drift = new DriftController(AuraProtocol.SampleRate) { TargetMs = latency };
+        var drift = new DriftController(AuraProtocol.SampleRate) { TargetMs = reachable };
         int playbackRate = AuraProtocol.SampleRate;
         var analyzer = new SpectrumAnalyzer(SpectrumHub.Bands, AuraProtocol.SampleRate, AuraProtocol.Channels);
         // Levels wait here until their audio actually comes out of the speaker, so the visualizer is in sync.
@@ -410,11 +414,12 @@ public sealed class ListenService : Service
             Prebuffer(packets, playout.PrebufferFrames, stoppingToken);
             while (!packets.Completion.IsCompleted && !stoppingToken.IsCancellationRequested)
             {
-                if (PlayoutTuning.TargetLatencyMs is var wanted && wanted != latency)
+                if (PlayoutTuning.LatencyFor(stats.Links) is var wanted && wanted != latency)
                 {
-                    latency = wanted; // the sync slider moved
-                    playout.SetCushion(PlayoutTuning.CushionFrames(latency));
-                    drift.TargetMs = latency;
+                    latency = wanted; // the sync slider moved, or Wi-Fi came or went
+                    reachable = PlayoutTuning.ReachableLatencyMs(latency, outputMs);
+                    playout.SetCushion(PlayoutTuning.CushionFrames(latency, outputMs));
+                    drift.TargetMs = reachable;
                 }
 
                 if (!packets.TryRead(out var packet))
@@ -432,12 +437,13 @@ public sealed class ListenService : Service
                         break;
                     case Conceal:
                         decoder.Decode(ReadOnlySpan<byte>.Empty, pcm, AuraProtocol.FrameSamples);
+                        drift.RanDry(); // nothing left to play: certainly not the moment to play faster
                         break;
                     case Skip(var data):
                         decoder.Decode(data, pcm, AuraProtocol.FrameSamples);
                         continue;
                     case Rebuffer:
-                        stats.Playing(0, latency, 0); // ran dry: say so rather than leave the last good figures on screen
+                        stats.Playing(0, reachable, 0); // ran dry: say so rather than leave the last good figures on screen
                         Prebuffer(packets, playout.PrebufferFrames, stoppingToken);
                         drift.Restart();
                         continue;
@@ -453,7 +459,7 @@ public sealed class ListenService : Service
                 int rate = drift.Update(bufferedMs);
                 if (Math.Abs(rate - playbackRate) >= MinRateStepHz)
                     track.SetPlaybackRate(playbackRate = rate);
-                stats.Playing((int)bufferedMs, latency, drift.Correction * 1e6);
+                stats.Playing((int)bufferedMs, reachable, drift.Correction * 1e6);
 
                 // The visualizer only needs 25 updates a second, and none while nothing shows it.
                 if (!SpectrumHub.IsObserved)
