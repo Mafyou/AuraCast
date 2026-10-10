@@ -15,8 +15,10 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
 PACKAGE = "fr.mafyou.auramusic"
-# Play Console language -> folder here. French of France and of Canada share the same texts.
-LANGUAGES = {"fr-CA": "fr", "fr-FR": "fr", "en-US": "en"}
+# Play Console language -> folder here. The first one is the listing's default language; a language the
+# console holds and this list does not is removed from the listing.
+LANGUAGES = {"fr-FR": "fr", "en-US": "en"}
+DEFAULT_LANGUAGE = next(iter(LANGUAGES))
 LIMITS = {"title": 30, "short-description": 80, "full-description": 4000}
 FIELDS = {"title": "title", "short-description": "shortDescription", "full-description": "fullDescription"}
 
@@ -69,6 +71,12 @@ try:
         replace_images(language, "featureGraphic", [here / folder / "feature-graphic.png"])
         replace_images(language, "phoneScreenshots", shots)
         print(f"{language}: texts, icon, feature graphic, {len(shots)} screenshots")
+    # The default language cannot be removed: move it first.
+    edits.details().patch(packageName=PACKAGE, editId=edit, body={"defaultLanguage": DEFAULT_LANGUAGE}).execute()
+    for listing in edits.listings().list(packageName=PACKAGE, editId=edit).execute().get("listings", []):
+        if listing["language"] not in LANGUAGES:
+            edits.listings().delete(packageName=PACKAGE, editId=edit, language=listing["language"]).execute()
+            print(f"{listing['language']}: removed")
     if dry_run:
         edits.delete(packageName=PACKAGE, editId=edit).execute()
         print("dry run: draft edit thrown away, nothing changed")
