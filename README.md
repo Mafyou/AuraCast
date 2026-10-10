@@ -3,7 +3,7 @@
 Partage le son d'un téléphone Android avec d'autres téléphones Android, en Bluetooth, sans Wi-Fi ni internet.
 Une alternative maison à LE Audio Auracast pour les téléphones qui ne le supportent pas.
 
-Le téléphone **master** joue sa musique (YouTube Music, Spotify, n'importe quelle app) et les téléphones qui **écoutent** entendent la même chose, avec un léger décalage (environ 200 ms de tampon plus la latence Bluetooth).
+Le téléphone **master** joue sa musique (YouTube Music, YouTube, ou toute app qui laisse capter son audio) et les téléphones qui **écoutent** entendent la même chose, avec un léger décalage (environ 200 ms de tampon plus la latence Bluetooth).
 
 ## Utilisation
 
@@ -12,6 +12,8 @@ Le téléphone **master** joue sa musique (YouTube Music, Spotify, n'importe que
 3. Sur l'autre téléphone : **🎧 Écouter**. Il retrouve le master tout seul parmi les téléphones appairés et se reconnecte automatiquement s'il le perd.
 
 L'écran peut être éteint des deux côtés. La notification permet d'arrêter.
+
+**Apps qui ne se partagent pas** : Android laisse chaque app interdire la capture de son audio. Avec celles qui le font (Spotify notamment), la diffusion démarre normalement mais les autres n'entendent que du silence ; AuraMusic ne peut pas le contourner.
 
 Hors de la maison, sans Wi-Fi commun : l'un active son partage de connexion et l'autre s'y connecte. Les deux téléphones sont alors sur le même réseau et le son passe en Wi-Fi, avec le Bluetooth en secours.
 
