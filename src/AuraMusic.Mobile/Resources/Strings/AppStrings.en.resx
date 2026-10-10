@@ -42,7 +42,8 @@
   <data name="TutorialAnywhereTitle" xml:space="preserve"><value>Anywhere</value></data>
   <data name="TutorialAnywhereText" xml:space="preserve"><value>The sound travels over Wi-Fi and Bluetooth at once: if one drops, the other takes over. No Wi-Fi around? One of you turns on their hotspot, the other joins it: you get Wi-Fi quality anywhere. The music goes from one phone to the other, never through the internet.</value></data>
   <data name="TutorialTipsTitle" xml:space="preserve"><value>Tips</value></data>
-  <data name="TutorialTipsText" xml:space="preserve"><value>Stay within a few meters. The sound arrives slightly delayed: in the same room, everyone wears headphones to avoid echo. Up to 3 or 4 phones can listen at once. Pull the home screen down to check for an update.</value></data>
+  <data name="TutorialTipsText" xml:space="preserve"><value>Stay within a few meters. The sound arrives slightly delayed: in the same room, everyone wears headphones to avoid echo. Up to 3 or 4 phones can listen at once.</value></data>
+  <data name="TutorialTipsUpdate" xml:space="preserve"><value>Pull the home screen down to check for an update.</value></data>
   <data name="NotificationBroadcasting" xml:space="preserve"><value>Sharing your sound</value></data>
   <data name="NotificationListening" xml:space="preserve"><value>Listening</value></data>
   <data name="NotificationStop" xml:space="preserve"><value>Stop</value></data>

@@ -42,7 +42,8 @@
   <data name="TutorialAnywhereTitle" xml:space="preserve"><value>Partout</value></data>
   <data name="TutorialAnywhereText" xml:space="preserve"><value>Le son passe par le Wi-Fi et le Bluetooth à la fois : si l'un décroche, l'autre prend le relais. Pas de Wi-Fi sous la main ? L'un de vous active son partage de connexion, l'autre s'y connecte : vous retrouvez la qualité Wi-Fi n'importe où. La musique va d'un téléphone à l'autre, sans passer par internet.</value></data>
   <data name="TutorialTipsTitle" xml:space="preserve"><value>Astuces</value></data>
-  <data name="TutorialTipsText" xml:space="preserve"><value>Restez à quelques mètres les uns des autres. Le son arrive avec un léger décalage : dans la même pièce, mettez tous un casque pour éviter l'écho. Jusqu'à 3 ou 4 téléphones peuvent écouter en même temps. Tire l'écran d'accueil vers le bas pour chercher une mise à jour.</value></data>
+  <data name="TutorialTipsText" xml:space="preserve"><value>Restez à quelques mètres les uns des autres. Le son arrive avec un léger décalage : dans la même pièce, mettez tous un casque pour éviter l'écho. Jusqu'à 3 ou 4 téléphones peuvent écouter en même temps.</value></data>
+  <data name="TutorialTipsUpdate" xml:space="preserve"><value>Tire l'écran d'accueil vers le bas pour chercher une mise à jour.</value></data>
   <data name="NotificationBroadcasting" xml:space="preserve"><value>Diffusion de ton son en cours</value></data>
   <data name="NotificationListening" xml:space="preserve"><value>Écoute en cours</value></data>
   <data name="NotificationStop" xml:space="preserve"><value>Arrêter</value></data>

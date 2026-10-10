@@ -18,9 +18,11 @@
 	<uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 	<uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" android:usesPermissionFlags="neverForLocation" />
 
-	<!-- In-app updates: read GitHub releases, download the APK and hand it to the package installer -->
+	<!--
+		Sockets of the Wi-Fi link, and reading GitHub releases for in-app updates. The permission to install the
+		downloaded APK is declared in AppUpdater.cs, so that a Play Store build can leave it out.
+	-->
 	<uses-permission android:name="android.permission.INTERNET" />
-	<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
 	<!-- Keep streaming with the screen off -->
 	<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

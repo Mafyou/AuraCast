@@ -103,5 +103,22 @@ Le numéro de version vit dans `src/AuraMusic.Mobile/AuraMusic.Mobile.csproj` (`
 gh workflow run ci.yml --ref main
 ```
 
-Le workflow lit la version dans le csproj, lance les tests du Kernel, compile l'APK Release signé (**warnings traités comme des erreurs**), crée le tag `v` + version sur le commit compilé et la release GitHub avec l'APK attaché et son empreinte SHA-256. Il refuse une autre branche que `main` et une version déjà publiée (il faut alors monter le numéro). Le SDK .NET est épinglé dans `global.json`.
+Le workflow lit la version dans le csproj, lance les tests du Kernel, compile l'APK Release signé (**warnings traités comme des erreurs**), crée le tag `v` + version sur le commit compilé et la release GitHub avec l'APK attaché et son empreinte SHA-256. Il compile aussi le bundle du Play Store (voir plus bas), gardé 30 jours parmi les artefacts de l'exécution. Il refuse une autre branche que `main` et une version déjà publiée (il faut alors monter le numéro). Le SDK .NET est épinglé dans `global.json`.
+Le code de version (celui qu'Android et le Play Store comparent) se déduit du numéro : 1.7.5 donne 10705.
+
+### Deux distributions
+
+| | GitHub | Play Store |
+|---|---|---|
+| Format | APK | AAB |
+| Mise à jour | par l'app, depuis les releases GitHub | par le Play Store |
+| Permission d'installer des paquets | oui | non (le Play Store la refuse) |
+| Build | par défaut | `-p:Distribution=Play` |
+
+Les deux sortent du même code : la constante `PLAY_STORE` désactive la mise à jour intégrée, et la permission est déclarée dans `AppUpdater.cs` plutôt que dans le manifeste pour pouvoir disparaître. Sur le Play Store, Google signe l'app avec sa propre clé : un téléphone suit l'une ou l'autre distribution, et passer de l'une à l'autre demande de désinstaller.
+
+```sh
+dotnet publish src/AuraMusic.Mobile -f net11.0-android -c Release -o artifacts/play -p:Distribution=Play -p:AndroidPackageFormat=aab -p:AndroidKeyStore=true -p:AndroidSigningKeyStore=<keystore> -p:AndroidSigningKeyAlias=mafyou -p:AndroidSigningStorePass=env:KEYSTORE_PASSWORD -p:AndroidSigningKeyPass=env:KEYSTORE_PASSWORD
+```
+
 Le workflow a besoin de deux secrets du dépôt : `ANDROID_KEYSTORE_BASE64` (le keystore, alias `mafyou`, encodé en base64) et `ANDROID_KEYSTORE_PASSWORD`. Toutes les versions doivent être signées avec la même clé, sinon Android refuse d'installer la mise à jour.

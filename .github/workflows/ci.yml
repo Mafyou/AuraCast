@@ -1,7 +1,8 @@
 name: Release AuraMusic APK
 
 # Started by hand only (Actions › Release AuraMusic APK › Run workflow, on main): the Kernel tests, then
-# the signed APK attached to a new GitHub release, which the app offers to every phone at its next launch.
+# the signed APK attached to a new GitHub release, which the app offers to every phone at its next launch,
+# and the Play Store bundle (AAB) kept as an artifact of the run, to upload in the Play Console.
 # The version is the one written in AuraMusic.Mobile.csproj: raise it there, in a pull request, first.
 # Warnings fail the build, so "0 warning" is checked here rather than by eye.
 on:
@@ -103,8 +104,35 @@ jobs:
             exit 1
           fi
 
-      # Android only installs an update whose version code is higher. The former release workflow counted
-      # up to 12; this workflow's own run numbers start over, hence the offset.
+      # The Play Store's own build: no self-update (the store forbids it), an AAB instead of an APK. Built
+      # first, so that a release is never published without its bundle. The key is its upload key there.
+      - name: Build the Play Store bundle
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: >
+          dotnet publish src/AuraMusic.Mobile -f net11.0-android -c Release -o publish-play
+          -p:Distribution=Play
+          -p:TreatWarningsAsErrors=true
+          -p:AndroidPackageFormat=aab
+          -p:AndroidKeyStore=true
+          -p:AndroidSigningKeyStore="$RUNNER_TEMP/auramusic.keystore"
+          -p:AndroidSigningKeyAlias=mafyou
+          -p:AndroidSigningStorePass=env:KEYSTORE_PASSWORD
+          -p:AndroidSigningKeyPass=env:KEYSTORE_PASSWORD
+
+      - name: Keep the bundle for the Play Console
+        uses: actions/upload-artifact@v4
+        with:
+          name: AuraMusic-v${{ env.VERSION }}-play
+          path: publish-play/fr.mafyou.auramusic-Signed.aab
+          if-no-files-found: error
+          retention-days: 30
+
+      # The two builds differ by a compilation constant and by a permission: nothing of the first may linger.
+      - name: Clean between the two builds
+        run: rm -rf src/AuraMusic.Mobile/obj src/AuraMusic.Mobile/bin
+
+      # The version code follows from the version in the csproj, so each release installs over the previous one.
       - name: Build the APK
         env:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -112,7 +140,6 @@ jobs:
           dotnet publish src/AuraMusic.Mobile -f net11.0-android -c Release -o publish
           -p:TreatWarningsAsErrors=true
           -p:AndroidPackageFormat=apk
-          -p:ApplicationVersion=$((GITHUB_RUN_NUMBER + 100))
           -p:AndroidKeyStore=true
           -p:AndroidSigningKeyStore="$RUNNER_TEMP/auramusic.keystore"
           -p:AndroidSigningKeyAlias=mafyou

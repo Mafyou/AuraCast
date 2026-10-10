@@ -25,10 +25,21 @@
 
 		<!--
 			Versions. The display version is the one released: raise it here, and the release workflow tags and
-			publishes exactly that number. The version code below is replaced by the workflow at each release.
+			publishes exactly that number. The version code Android and the Play Store compare follows from it
+			(1.7.5 gives 10705), so it grows with every release, wherever the build is made.
 		-->
-		<ApplicationDisplayVersion>1.7.4</ApplicationDisplayVersion>
-		<ApplicationVersion>1</ApplicationVersion>
+		<ApplicationDisplayVersion>1.7.5</ApplicationDisplayVersion>
+		<VersionMajor>$([System.Version]::Parse('$(ApplicationDisplayVersion)').Major)</VersionMajor>
+		<VersionMinor>$([System.Version]::Parse('$(ApplicationDisplayVersion)').Minor)</VersionMinor>
+		<VersionPatch>$([System.Version]::Parse('$(ApplicationDisplayVersion)').Build)</VersionPatch>
+		<ApplicationVersion>$([MSBuild]::Add($([MSBuild]::Add($([MSBuild]::Multiply($(VersionMajor), 10000)), $([MSBuild]::Multiply($(VersionMinor), 100)))), $(VersionPatch)))</ApplicationVersion>
+
+		<!--
+			Where this build goes: GitHub (an APK that updates itself from the releases) or Play (an AAB the Play
+			Store updates, which forbids an app that installs packages). Build the latter with -p:Distribution=Play.
+		-->
+		<Distribution Condition="'$(Distribution)' == ''">GitHub</Distribution>
+		<DefineConstants Condition="'$(Distribution)' == 'Play'">$(DefineConstants);PLAY_STORE</DefineConstants>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
 		<WindowsPackageType>None</WindowsPackageType>
