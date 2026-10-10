@@ -79,9 +79,13 @@ adb logcat -s AuraMusic
 
 50 trames/s veut dire que la liaison suit le temps réel.
 
+### Intégration continue
+
+À chaque push sur `main` et chaque pull request, [le workflow CI](.github/workflows/ci.yml) lance les tests du Kernel et compile l'app Android en Release, **warnings traités comme des erreurs**. Le SDK .NET est épinglé dans `global.json`.
+
 ### Release
 
-Pousser un tag `v*` sur `main` déclenche [le workflow de release](.github/workflows/release.yml) : tests, APK Release signé, release GitHub avec l'APK attaché.
+Pousser un tag `v*` sur `main` déclenche [le workflow de release](.github/workflows/release.yml) : vérification que le tag est sur `main`, tests, APK Release signé, release GitHub avec l'APK attaché et son empreinte SHA-256.
 
 ```sh
 git tag v1.0.0 && git push origin v1.0.0

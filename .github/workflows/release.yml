@@ -1,9 +1,15 @@
 name: Release
 
 # Push a tag like v1.0.0 on main: tests run, the APK is built, signed and attached to a GitHub release.
+# The app offers that release to every phone at its next launch.
 on:
   push:
     tags: ['v*']
+
+# Two releases must never race for the same phones.
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -11,8 +17,18 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the whole history, to check where the tag sits
+
+      - name: Check the tag is on main
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME is not on main: releases are only cut from main."
+            exit 1
+          fi
 
       - uses: actions/setup-java@v4
         with:
@@ -21,8 +37,13 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '11.0.x'
-          dotnet-quality: preview
+          global-json-file: global.json
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-android-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'global.json') }}
+          restore-keys: nuget-android-
 
       - name: Install the MAUI Android workload
         run: dotnet workload install maui-android
@@ -51,6 +72,7 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: >
           dotnet publish src/AuraMusic.Mobile -f net11.0-android -c Release -o publish
+          -p:TreatWarningsAsErrors=true
           -p:AndroidPackageFormat=apk
           -p:ApplicationDisplayVersion="${GITHUB_REF_NAME#v}"
           -p:ApplicationVersion=${{ github.run_number }}
@@ -64,6 +86,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp publish/fr.mafyou.auramusic-Signed.apk "AuraMusic-$GITHUB_REF_NAME.apk"
-          gh release create "$GITHUB_REF_NAME" "AuraMusic-$GITHUB_REF_NAME.apk" \
-            --title "AuraMusic $GITHUB_REF_NAME" --generate-notes
+          apk="AuraMusic-$GITHUB_REF_NAME.apk"
+          cp publish/fr.mafyou.auramusic-Signed.apk "$apk"
+          checksum=$(sha256sum "$apk" | cut -d' ' -f1)
+          gh release create "$GITHUB_REF_NAME" "$apk" \
+            --title "AuraMusic $GITHUB_REF_NAME" --generate-notes \
+            --notes "SHA-256 (\`$apk\`): \`$checksum\`"
