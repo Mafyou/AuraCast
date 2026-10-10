@@ -85,14 +85,16 @@ adb logcat -s AuraMusic
 
 ### Intégration continue
 
-À chaque push sur `main` et chaque pull request, [le workflow CI](.github/workflows/ci.yml) lance les tests du Kernel et compile l'app Android en Release, **warnings traités comme des erreurs**. Le SDK .NET est épinglé dans `global.json`.
+`main` est protégée : tout passe par une pull request. Sur chacune, [le workflow de vérification](.github/workflows/pr.yml) lance les tests du Kernel et compile l'app Android en Release, **warnings traités comme des erreurs** ; les deux doivent être au vert pour fusionner.
 
 ### Release
 
-Pousser un tag `v*` sur `main` déclenche le job de release du même workflow : vérification que le tag est sur `main`, tests, APK Release signé, release GitHub avec l'APK attaché et son empreinte SHA-256.
+Une version ne se publie qu'à la main, depuis [le workflow de release](.github/workflows/ci.yml), sur `main` : **Actions › Release AuraMusic APK › Run workflow**, en donnant le numéro de version, ou :
 
 ```sh
-git tag v1.0.0 && git push origin v1.0.0
+gh workflow run ci.yml --ref main -f version=1.7.0
 ```
+
+Le workflow lance les tests du Kernel, compile l'APK Release signé (**warnings traités comme des erreurs**), crée le tag `v1.7.0` sur le commit compilé et la release GitHub avec l'APK attaché et son empreinte SHA-256. Il refuse une autre branche que `main` et un numéro déjà publié. Le SDK .NET est épinglé dans `global.json`.
 
 Le workflow a besoin de deux secrets du dépôt : `ANDROID_KEYSTORE_BASE64` (le keystore, alias `mafyou`, encodé en base64) et `ANDROID_KEYSTORE_PASSWORD`. Toutes les versions doivent être signées avec la même clé, sinon Android refuse d'installer la mise à jour.
