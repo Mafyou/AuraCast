@@ -11,6 +11,11 @@
             // Inside the pull-to-update ScrollView the layout would collapse: give it the visible height.
             HomeScroll.SizeChanged += (_, _) => HomeLayout.HeightRequest = HomeScroll.Height;
             LanguageButton.Text = $"🌐 {AppLanguages.Next(LanguageSettings.Current).ToUpperInvariant()}";
+            VersionLabel.Text = $"v{AppInfo.Current.VersionString}";
+#if DEBUG
+            // A test build shows the version being worked on, not a published one, and never updates itself.
+            VersionLabel.Text += " · dev";
+#endif
             // Maximum first: a slider refuses a minimum above its current maximum of 1.
             SyncSlider.Maximum = PlayoutTuning.MaxLatencyMs;
             SyncSlider.Minimum = PlayoutTuning.MinLatencyMs;
