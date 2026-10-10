@@ -26,9 +26,9 @@
 		<!--
 			Versions. The display version is the one released: raise it here, and the release workflow tags and
 			publishes exactly that number. The version code Android and the Play Store compare follows from it
-			(1.7.6 gives 10706), so it grows with every release, wherever the build is made.
+			(1.7.7 gives 10707), so it grows with every release, wherever the build is made.
 		-->
-		<ApplicationDisplayVersion>1.7.6</ApplicationDisplayVersion>
+		<ApplicationDisplayVersion>1.7.7</ApplicationDisplayVersion>
 		<VersionMajor>$([System.Version]::Parse('$(ApplicationDisplayVersion)').Major)</VersionMajor>
 		<VersionMinor>$([System.Version]::Parse('$(ApplicationDisplayVersion)').Minor)</VersionMinor>
 		<VersionPatch>$([System.Version]::Parse('$(ApplicationDisplayVersion)').Build)</VersionPatch>
