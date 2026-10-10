@@ -12,6 +12,23 @@ public sealed record LanBeacon(uint Session, int Port, string Name)
     static ReadOnlySpan<byte> Magic => "AURB"u8;
     const byte Version = 1;
 
+    /// <summary>
+    /// The address that reaches every device of the subnet <paramref name="address"/> belongs to. The beacon is
+    /// sent there on each local interface: 255.255.255.255 may leave through mobile data instead of Wi-Fi.
+    /// </summary>
+    public static IPAddress DirectedBroadcast(IPAddress address, int prefixLength)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(prefixLength);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(prefixLength, 32);
+        Span<byte> bytes = stackalloc byte[4];
+        if (!address.TryWriteBytes(bytes, out int written) || written != 4)
+            throw new ArgumentException("IPv4 only.", nameof(address));
+        uint host = BinaryPrimitives.ReadUInt32BigEndian(bytes);
+        uint mask = prefixLength == 0 ? 0 : uint.MaxValue << (32 - prefixLength);
+        BinaryPrimitives.WriteUInt32BigEndian(bytes, host | ~mask);
+        return new IPAddress(bytes);
+    }
+
     public byte[] Encode()
     {
         var name = AuraProtocol.Truncate(Name);

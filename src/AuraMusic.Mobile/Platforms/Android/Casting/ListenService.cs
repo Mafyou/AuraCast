@@ -24,7 +24,12 @@ public sealed class ListenService : Service
     const string LastMasterKey = "lastMasterAddress";
 
     static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(2);
+    // After a link found another broadcast than the one being followed, or an incompatible master.
+    static readonly TimeSpan LongRetryDelay = TimeSpan.FromSeconds(15);
     static readonly TimeSpan WifiConnectTimeout = TimeSpan.FromSeconds(3);
+    // The master sends audio or a keep-alive at least every second: a link silent for this long is dead,
+    // even if the socket has not noticed (Wi-Fi lost, phone out of range).
+    static readonly TimeSpan LinkTimeout = TimeSpan.FromSeconds(5);
 
     // Spectrum levels waiting for their audio to be played; bounded in case the AudioTrack stalls.
     const int MaxPendingLevels = 50;
@@ -96,6 +101,7 @@ public sealed class ListenService : Service
         var adapter = ((BluetoothManager)GetSystemService(BluetoothService)!).Adapter;
         while (!stoppingToken.IsCancellationRequested)
         {
+            var retry = RetryDelay;
             try
             {
                 using var socket = ConnectToMaster(adapter, stoppingToken);
@@ -103,7 +109,8 @@ public sealed class ListenService : Service
                 {
                     using var closeOnStop = stoppingToken.Register(socket.Close);
                     var name = socket.RemoteDevice?.Name ?? "AuraMusic";
-                    ReadLink(socket.InputStream!, Links.Bluetooth, name, stoppingToken);
+                    if (!ReadLink(socket.InputStream!, socket.OutputStream!, Links.Bluetooth, name, socket.Close, stoppingToken))
+                        retry = LongRetryDelay; // Wi-Fi follows another master: do not hammer this one
                 }
             }
             catch (Exception) when (stoppingToken.IsCancellationRequested)
@@ -127,7 +134,7 @@ public sealed class ListenService : Service
             }
 
             // Master not broadcasting yet, stopped, or out of range: look for it again.
-            await Task.Delay(RetryDelay, stoppingToken).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+            await Task.Delay(retry, stoppingToken).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
         }
     }
 
@@ -170,8 +177,9 @@ public sealed class ListenService : Service
     {
         // Some phones drop broadcast datagrams while the screen is off unless a multicast lock is held.
         var wifi = (global::Android.Net.Wifi.WifiManager?)GetSystemService(WifiService);
+        // Held only while searching: it keeps the Wi-Fi radio busier, so it is released once connected.
         var multicast = wifi?.CreateMulticastLock("AuraMusic");
-        multicast?.Acquire();
+        multicast?.SetReferenceCounted(false);
         try
         {
             using var beacons = new UdpClient(AddressFamily.InterNetwork);
@@ -180,15 +188,23 @@ public sealed class ListenService : Service
 
             while (!stoppingToken.IsCancellationRequested)
             {
+                multicast?.Acquire();
                 var received = await beacons.ReceiveAsync(stoppingToken);
                 if (!LanBeacon.TryDecode(received.Buffer, out var beacon) || !IsOurMaster(beacon))
                     continue;
+                multicast?.Release();
                 try
                 {
                     await FollowOverWifiAsync(received.RemoteEndPoint.Address, beacon, stoppingToken);
                 }
+                catch (InvalidDataException ex) when (!stoppingToken.IsCancellationRequested)
+                {
+                    // An incompatible master: say so, and do not reconnect at every beacon.
+                    ReportProblem(ex.Message);
+                    await Task.Delay(LongRetryDelay, stoppingToken);
+                }
                 catch (Exception ex) when (!stoppingToken.IsCancellationRequested
-                    && ex is IOException or SocketException or InvalidDataException or System.OperationCanceledException)
+                    && ex is IOException or SocketException or System.OperationCanceledException)
                 {
                     // Lost the Wi-Fi link: Bluetooth (if any) carries on, and the next beacon reconnects.
                 }
@@ -217,24 +233,46 @@ public sealed class ListenService : Service
         }
         using var closeOnStop = stoppingToken.Register(client.Dispose);
         var stream = client.GetStream();
-        AuraProtocol.WriteHello(stream, DeviceName.Of(this));
-        await Task.Run(() => ReadLink(stream, Links.Wifi, beacon.Name, stoppingToken), stoppingToken);
+        bool joined = await Task.Run(() => ReadLink(stream, stream, Links.Wifi, beacon.Name, client.Dispose, stoppingToken), stoppingToken);
+        if (!joined)
+            await Task.Delay(LongRetryDelay, stoppingToken); // refused (not paired yet) or another broadcast
     }
 
     /// <summary>Reads one link until it drops, letting through only the packets the other link has not delivered yet.</summary>
-    void ReadLink(Stream stream, Links link, string name, CancellationToken stoppingToken)
+    /// <param name="close">Closes the link; also used when the master has been silent for too long.</param>
+    /// <returns><see langword="false"/> when the link was not used: another broadcast is already being followed.</returns>
+    bool ReadLink(Stream input, Stream output, Links link, string name, Action close, CancellationToken stoppingToken)
     {
-        uint session = AuraProtocol.ReadHeader(stream);
+        uint session = AuraProtocol.ReadHeader(input);
         if (!gate.Join(session))
-            return; // the other link follows another master: do not mix two broadcasts
+            return false; // the other link follows another master: do not mix two broadcasts
+        AuraProtocol.WriteHello(output, new Hello(DeviceName.Id, DeviceName.Of(this)));
 
-        LinkUp(link, name);
+        // A dead link does not always fail the read: close it ourselves when even keep-alives stop coming.
+        long lastHeard = Environment.TickCount64;
+        using var watchdog = new Timer(_ =>
+        {
+            if (Environment.TickCount64 - Interlocked.Read(ref lastHeard) > LinkTimeout.TotalMilliseconds)
+                close();
+        }, null, LinkTimeout, TimeSpan.FromSeconds(1));
+
+        // Up only once the master has sent something: it closes the link right after the hello when it does
+        // not admit this phone (Wi-Fi before any Bluetooth connection), and that must not flash "connected".
+        bool up = false;
         try
         {
             var buffer = new byte[AuraProtocol.MaxPacketSize];
             while (!stoppingToken.IsCancellationRequested)
             {
-                int length = AuraProtocol.ReadFrame(stream, buffer, out uint sequence);
+                int length = AuraProtocol.ReadFrame(input, buffer, out uint sequence);
+                Interlocked.Exchange(ref lastHeard, Environment.TickCount64);
+                if (!up)
+                {
+                    up = true;
+                    LinkUp(link, name);
+                }
+                if (length == 0)
+                    continue; // keep-alive: the music is paused, or this link idles behind the other one
                 stats.Received(link, length);
                 if (!gate.TryAccept(session, sequence))
                     continue; // the other link was faster
@@ -243,9 +281,27 @@ public sealed class ListenService : Service
                 packets.Writer.TryWrite(buffer.AsSpan(0, length).ToArray());
             }
         }
+        catch (IOException) when (!up && !stoppingToken.IsCancellationRequested)
+        {
+            return false; // refused, or gone before sending anything
+        }
         finally
         {
-            LinkDown(link);
+            if (up)
+                LinkDown(link);
+            else
+                ForgetBroadcastIfAlone();
+        }
+        return true;
+    }
+
+    /// <summary>A link joined a broadcast but never came up: free the gate unless the other link is using it.</summary>
+    void ForgetBroadcastIfAlone()
+    {
+        lock (linksLock)
+        {
+            if (bluetoothLinks + wifiLinks == 0)
+                gate.Reset();
         }
     }
 

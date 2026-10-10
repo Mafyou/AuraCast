@@ -8,12 +8,17 @@ sealed class LanServer(uint session, string name) : IDisposable
 {
     static readonly TimeSpan BeaconInterval = TimeSpan.FromSeconds(1);
     const int HelloTimeoutMs = 5_000;
+    // A listener that left without saying so (Wi-Fi lost) must not look connected for minutes.
+    const int WriteTimeoutMs = 3_000;
+
+    /// <summary>Interfaces of the mobile network: a beacon sent there reaches nobody and costs data.</summary>
+    static readonly FrozenSet<string> MobileDataPrefixes = ["rmnet", "ccmni", "pdp", "v4-", "clat", "dummy", "tun"];
 
     readonly TcpListener tcp = new(IPAddress.Any, 0);
-    readonly UdpClient udp = new() { EnableBroadcast = true };
+    readonly UdpClient anyInterface = new() { EnableBroadcast = true };
 
-    /// <param name="onListener">A listener connected and said who it is: its stream, its name, how to close it.</param>
-    public void Start(Action<Stream, string, Action> onListener, CancellationToken stoppingToken)
+    /// <param name="onListener">A listener connected: its stream and how to close it.</param>
+    public void Start(Action<Stream, Action> onListener, CancellationToken stoppingToken)
     {
         tcp.Start();
         var beacon = new LanBeacon(session, ((IPEndPoint)tcp.LocalEndpoint).Port, name).Encode();
@@ -23,14 +28,23 @@ sealed class LanServer(uint session, string name) : IDisposable
 
     async Task AnnounceAsync(byte[] beacon, CancellationToken stoppingToken)
     {
-        var everyone = new IPEndPoint(IPAddress.Broadcast, LanBeacon.UdpPort);
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                await udp.SendAsync(beacon, everyone, stoppingToken);
+                bool sent = false;
+                foreach (var (local, broadcast) in LocalBroadcasts())
+                {
+                    // Bound to the interface's own address, so the beacon leaves through it and not through
+                    // whichever network Android routes 255.255.255.255 to (often mobile data).
+                    using var socket = new UdpClient(new IPEndPoint(local, 0)) { EnableBroadcast = true };
+                    await socket.SendAsync(beacon, new IPEndPoint(broadcast, LanBeacon.UdpPort), stoppingToken);
+                    sent = true;
+                }
+                if (!sent)
+                    await anyInterface.SendAsync(beacon, new IPEndPoint(IPAddress.Broadcast, LanBeacon.UdpPort), stoppingToken);
             }
-            catch (SocketException)
+            catch (Exception ex) when (ex is SocketException or NetworkInformationException)
             {
                 // Not on Wi-Fi right now: keep announcing, it may come back.
             }
@@ -38,7 +52,23 @@ sealed class LanServer(uint session, string name) : IDisposable
         }
     }
 
-    async Task AcceptAsync(Action<Stream, string, Action> onListener, CancellationToken stoppingToken)
+    /// <summary>Each local IPv4 address with the broadcast address of its subnet.</summary>
+    static IEnumerable<(IPAddress Local, IPAddress Broadcast)> LocalBroadcasts()
+    {
+        foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
+        {
+            if (nic.OperationalStatus != OperationalStatus.Up
+                || nic.NetworkInterfaceType == NetworkInterfaceType.Loopback
+                || MobileDataPrefixes.Any(prefix => nic.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            foreach (var unicast in nic.GetIPProperties().UnicastAddresses)
+                if (unicast.Address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(unicast.Address))
+                    yield return (unicast.Address, LanBeacon.DirectedBroadcast(unicast.Address, Math.Clamp(unicast.PrefixLength, 0, 32)));
+        }
+    }
+
+    async Task AcceptAsync(Action<Stream, Action> onListener, CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -53,27 +83,16 @@ sealed class LanServer(uint session, string name) : IDisposable
             }
 
             client.NoDelay = true; // 20 ms packets must not wait for Nagle
-            _ = Task.Run(() =>
-            {
-                try
-                {
-                    var stream = client.GetStream();
-                    stream.ReadTimeout = HelloTimeoutMs; // a silent connection is not one of ours
-                    var listener = AuraProtocol.ReadHello(stream);
-                    stream.ReadTimeout = Timeout.Infinite;
-                    onListener(stream, listener, client.Dispose);
-                }
-                catch (Exception ex) when (ex is IOException or InvalidDataException or SocketException)
-                {
-                    client.Dispose();
-                }
-            }, stoppingToken);
+            var stream = client.GetStream();
+            stream.ReadTimeout = HelloTimeoutMs; // a silent connection is not one of ours
+            stream.WriteTimeout = WriteTimeoutMs;
+            onListener(stream, client.Dispose);
         }
     }
 
     public void Dispose()
     {
         tcp.Stop();
-        udp.Dispose();
+        anyInterface.Dispose();
     }
 }

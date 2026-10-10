@@ -20,7 +20,7 @@ L'écran peut être éteint des deux côtés. La notification permet d'arrêter.
  App musicale ─► AudioPlaybackCapture               Téléphones appairés → connexion RFCOMM
                  PCM 48 kHz stéréo                        │
                       │                                   ▼
-                 Encodeur Opus 96 kbps              Tampon d'environ 200 ms
+                 Encodeur Opus 96-160 kbps          Tampon d'environ 200 ms
                  (trames de 20 ms)                        │
                       │                                   ▼
                  Serveur RFCOMM  ───── Bluetooth ───►  Décodeur Opus ─► AudioTrack 🎧
@@ -28,8 +28,10 @@ L'écran peut être éteint des deux côtés. La notification permet d'arrêter.
 ```
 
 - **Capture** : `AudioPlaybackCapture` (Android 10+) via MediaProjection, dans un service au premier plan.
-- **Transport** : Bluetooth Classic RFCOMM (trouvé via un enregistrement SDP, `AuraProtocol.ServiceUuid`) **et**, quand les téléphones sont sur le même Wi-Fi, TCP sur le réseau local, annoncé par une balise UDP chaque seconde (`LanBeacon`). L'auditeur suit les deux en même temps et garde le premier exemplaire de chaque paquet numéroté (`SequenceGate`) : si un lien cale, l'autre prend le relais. Le BLE L2CAP a été essayé en premier mais plafonnait à ~14 kbps.
-- **Protocole** (v2) : un en-tête `AURA` + version + identifiant de session, puis des paquets Opus préfixés par leur longueur et leur numéro (`src/AuraMusic.Kernel/Protocol/AuraProtocol.cs`).
+- **Transport** : Bluetooth Classic RFCOMM (trouvé via un enregistrement SDP, `AuraProtocol.ServiceUuid`) **et**, quand les téléphones sont sur le même Wi-Fi, TCP sur le réseau local, annoncé par une balise UDP chaque seconde sur chaque interface locale (`LanBeacon`). L'auditeur suit les deux et garde le premier exemplaire de chaque paquet numéroté (`SequenceGate`). Côté master, `LinkRouter` met le Bluetooth d'un téléphone en veille tant que son Wi-Fi suit, et le débit passe de 96 à 160 kbps quand tous les auditeurs sont en Wi-Fi. Le BLE L2CAP a été essayé en premier mais plafonnait à ~14 kbps.
+- **Confiance** : un téléphone n'est accepté en Wi-Fi que s'il s'est déjà connecté en Bluetooth, donc appairé (`TrustedDevices`). Personne d'autre sur le réseau ne peut écouter.
+- **Liens morts** : le master envoie un signal de vie chaque seconde quand il n'y a pas de son ; un lien muet 5 s est fermé et se reconnecte.
+- **Protocole** (v3) : le master envoie un en-tête `AURA` + version + identifiant de session, l'auditeur répond par un « hello » (identifiant du téléphone + nom), puis viennent des paquets Opus préfixés par leur longueur et leur numéro, et des trames vides en signal de vie (`src/AuraMusic.Kernel/Protocol/AuraProtocol.cs`).
 - **Lecture** : le décodage suit l'horloge de lecture. Un paquet en retard est comblé par la dissimulation de pertes d'Opus et le retard accumulé est rattrapé en sautant une trame.
 - **Lecture** : thread en priorité audio Android, sortie en virgule flottante. Un paquet en retard n'est comblé (dissimulation d'Opus) que si la sortie audio va manquer de son ; un retard accumulé est rattrapé en raccourcissant les trames de 1 ms avec un fondu, sans clic.
 - **Plusieurs auditeurs** : chaque connexion a sa propre file d'envoi. À 96 kbps, la liaison garde de la marge pour plusieurs téléphones (le Bluetooth classique accepte au plus 7 appareils connectés au master).
@@ -46,7 +48,7 @@ L'écran peut être éteint des deux côtés. La notification permet d'arrêter.
   - `Spectrum/` : l'analyseur de spectre ;
   - `Updates/` : lecture de la dernière release GitHub et comparaison des versions (une union `UpdateCheck`) ;
   - `Localization/` : choix de la langue (FR par défaut, EN) ;
-  - `Multipath/` : fusion des liens Bluetooth et Wi-Fi (`SequenceGate`) et balise réseau (`LanBeacon`).
+  - `Multipath/` : fusion des liens Bluetooth et Wi-Fi (`SequenceGate`), répartition côté master (`LinkRouter`), balise réseau (`LanBeacon`) et téléphones de confiance (`TrustedDevices`).
 - `src/AuraMusic.Mobile` : l'app. Code Android dans `Platforms/Android/Casting/` (`BroadcastService` côté master, `ListenService` côté écoute).
 - `tests/AuraMusic.Kernel.Tests` : tests unitaires xUnit v3 + Shouldly + Moq.
 - Chaque projet regroupe ses `global using` dans un `Usings.cs` à sa racine.

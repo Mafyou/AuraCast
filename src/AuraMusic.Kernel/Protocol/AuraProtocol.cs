@@ -2,9 +2,10 @@ namespace AuraMusic.Kernel.Protocol;
 
 /// <summary>
 /// Wire format, the same over Bluetooth RFCOMM and Wi-Fi TCP:
-/// a header ("AURA", version, session id), then length-prefixed, numbered Opus packets of 20 ms each.
-/// The session id and the sequence numbers let a listener connected over both links keep the first copy
-/// of every packet and drop the other.
+/// the master sends a header ("AURA", version, session id), the listener answers with a <see cref="Hello"/>,
+/// then come length-prefixed, numbered Opus packets of 20 ms each, and empty keep-alive frames when there is
+/// no sound. The session id and the sequence numbers let a listener connected over both links keep the first
+/// copy of every packet and drop the other.
 /// </summary>
 public static class AuraProtocol
 {
@@ -17,10 +18,12 @@ public static class AuraProtocol
     // Robustness first: very good Opus stereo music for half the airtime of 192 kbps, so even a busy
     // Bluetooth radio (headphones, distance, several listeners) keeps up.
     public const int Bitrate = 96_000;
+    /// <summary>Used while every listener is served by healthy Wi-Fi, where airtime is not a concern.</summary>
+    public const int WifiBitrate = 160_000;
     public const int MaxPacketSize = 1275;
     public const int MaxNameBytes = 64;
 
-    const byte Version = 2;
+    const byte Version = 3;
     const int HeaderSize = 4 + 1 + 4;
     const int FramePrefixSize = 2 + 4;
     static ReadOnlySpan<byte> Magic => "AURA"u8;
@@ -71,26 +74,33 @@ public static class AuraProtocol
         return size;
     }
 
-    /// <summary>Sent by a listener over Wi-Fi right after connecting, so the master can show who it is.</summary>
-    public static void WriteHello(Stream stream, string name)
+    /// <summary>
+    /// An empty frame, sent about once a second while there is no sound (music paused), so both ends can tell
+    /// a quiet link from a dead one. <see cref="ReadFrame"/> returns 0 for it.
+    /// </summary>
+    public static void WriteKeepAlive(Stream stream) => WriteFrame(stream, 0, []);
+
+    /// <summary>Sent by a listener on every link right after the header, so the master knows which phone it is.</summary>
+    public static void WriteHello(Stream stream, Hello hello)
     {
-        var bytes = Truncate(name);
-        Span<byte> hello = stackalloc byte[1 + bytes.Length];
-        hello[0] = (byte)bytes.Length;
-        bytes.CopyTo(hello[1..]);
-        stream.Write(hello);
+        var name = Truncate(hello.Name);
+        Span<byte> bytes = stackalloc byte[16 + 1 + name.Length];
+        hello.Id.TryWriteBytes(bytes);
+        bytes[16] = (byte)name.Length;
+        name.CopyTo(bytes[17..]);
+        stream.Write(bytes);
         stream.Flush();
     }
 
-    public static string ReadHello(Stream stream)
+    public static Hello ReadHello(Stream stream)
     {
-        Span<byte> length = stackalloc byte[1];
-        stream.ReadExactly(length);
-        if (length[0] > MaxNameBytes)
+        Span<byte> prefix = stackalloc byte[17];
+        stream.ReadExactly(prefix);
+        if (prefix[16] > MaxNameBytes)
             throw new InvalidDataException(KernelStrings.NotAuraStream);
-        Span<byte> name = stackalloc byte[length[0]];
+        Span<byte> name = stackalloc byte[prefix[16]];
         stream.ReadExactly(name);
-        return Encoding.UTF8.GetString(name);
+        return new Hello(new Guid(prefix[..16]), Encoding.UTF8.GetString(name));
     }
 
     /// <summary>UTF-8 bytes of <paramref name="name"/>, cut to <see cref="MaxNameBytes"/> on a character boundary.</summary>
@@ -105,3 +115,7 @@ public static class AuraProtocol
         return bytes[..cut];
     }
 }
+
+/// <param name="Id">Stable per installation: the same phone is recognised over Bluetooth and over Wi-Fi.</param>
+/// <param name="Name">What the master shows.</param>
+public sealed record Hello(Guid Id, string Name);

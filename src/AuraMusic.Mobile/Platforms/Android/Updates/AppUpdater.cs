@@ -38,6 +38,10 @@ public static class AppUpdater
     public static async Task<string> DownloadAsync(AppRelease release, IProgress<double> progress, CancellationToken stoppingToken)
     {
         var path = Path.Combine(FileSystem.CacheDirectory, $"AuraMusic-{release.Tag}.apk");
+        // Earlier downloads are 40 MB each and of no use once installed.
+        foreach (var old in Directory.EnumerateFiles(FileSystem.CacheDirectory, "AuraMusic-*.apk"))
+            if (old != path)
+                File.Delete(old);
         using var response = await Http.GetAsync(release.ApkUrl, HttpCompletionOption.ResponseHeadersRead, stoppingToken);
         response.EnsureSuccessStatusCode();
         long? total = response.Content.Headers.ContentLength;

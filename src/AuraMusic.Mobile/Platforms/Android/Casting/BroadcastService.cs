@@ -33,6 +33,12 @@ public sealed class BroadcastService : Service
     BluetoothServerSocket? server;
     LanServer? lan;
 
+    // Phones that already connected over Bluetooth (so, paired): the only ones accepted over Wi-Fi, where
+    // anybody on the network could otherwise reach the port.
+    const string TrustedKey = "trustedListeners";
+    readonly Lock trustLock = new();
+    TrustedDevices trusted = TrustedDevices.Parse(Preferences.Get(TrustedKey, null));
+
     // Identifies this broadcast: a listener following it over two links only merges packets of the same session.
     readonly uint session = (uint)Random.Shared.NextInt64(uint.MaxValue + 1L);
 
@@ -121,7 +127,7 @@ public sealed class BroadcastService : Service
         try
         {
             lan = new LanServer(session, DeviceName.Of(this));
-            lan.Start((stream, name, close) => AddListener(new ListenerLink(stream, name, close), stoppingToken), stoppingToken);
+            lan.Start((stream, close) => AddListener(new ListenerLink(stream, stream, Links.Wifi, close), stoppingToken), stoppingToken);
         }
         catch (SocketException ex)
         {
@@ -131,11 +137,20 @@ public sealed class BroadcastService : Service
 
     void AddListener(ListenerLink link, CancellationToken stoppingToken)
     {
-        lock (listeners)
-            listeners.Add(link);
-        PublishListeners();
+        _ = Task.Run(async () =>
+        {
+            var hello = link.Handshake(session);
+            if (!Admit(link.Kind, hello))
+            {
+                Log.Warn(AuraLog.Tag, $"Refused {hello.Name} over Wi-Fi: never seen over Bluetooth");
+                return;
+            }
 
-        _ = Task.Run(() => link.Run(session, stoppingToken)).ContinueWith(_ =>
+            lock (listeners)
+                listeners.Add(link);
+            PublishListeners();
+            await link.Run(stoppingToken);
+        }, stoppingToken).ContinueWith(_ =>
         {
             lock (listeners)
                 listeners.Remove(link);
@@ -143,6 +158,24 @@ public sealed class BroadcastService : Service
             if (!stoppingToken.IsCancellationRequested)
                 PublishListeners();
         }, TaskScheduler.Default);
+    }
+
+    /// <summary>A Bluetooth connection proves the phone is paired, and earns it Wi-Fi access from then on.</summary>
+    bool Admit(Links kind, Hello hello)
+    {
+        lock (trustLock)
+        {
+            if (kind == Links.Wifi)
+                return trusted.Contains(hello.Id);
+
+            var updated = trusted.With(hello.Id);
+            if (!ReferenceEquals(updated, trusted))
+            {
+                trusted = updated;
+                Preferences.Set(TrustedKey, updated.Serialize());
+            }
+            return true;
+        }
     }
 
     void AcceptLoop(CancellationToken stoppingToken)
@@ -170,7 +203,7 @@ public sealed class BroadcastService : Service
                 return;
             }
 
-            AddListener(new ListenerLink(socket.OutputStream!, socket.RemoteDevice?.Name ?? "?", socket.Close), stoppingToken);
+            AddListener(new ListenerLink(socket.InputStream!, socket.OutputStream!, Links.Bluetooth, socket.Close), stoppingToken);
         }
     }
 
@@ -178,7 +211,7 @@ public sealed class BroadcastService : Service
     {
         ImmutableArray<string> names;
         lock (listeners)
-            names = [.. listeners.Select(link => link.Name).Distinct()]; // one phone may be on both links
+            names = [.. listeners.GroupBy(link => link.Id).Select(phone => phone.First().Name)]; // a phone may be on both links
         AuraHub.Publish(names.IsEmpty ? new Advertising() : new Streaming(names));
     }
 
@@ -238,27 +271,42 @@ public sealed class BroadcastService : Service
 
         var packet = new byte[AuraProtocol.MaxPacketSize];
         uint sequence = 0;
+        int bitrate = AuraProtocol.Bitrate;
+        ListenerLink[] targets = [];
+        var statuses = new LinkStatus[4];
+        var carries = new bool[4];
         long windowStart = Environment.TickCount64;
         var encoding = TimeSpan.Zero;
         int frames = 0;
         await foreach (var pcm in toEncode.Reader.ReadAllAsync(stoppingToken))
         {
+            lock (listeners)
+                targets = [.. listeners];
+            if (statuses.Length < targets.Length)
+                (statuses, carries) = (new LinkStatus[targets.Length], new bool[targets.Length]);
+            for (int i = 0; i < targets.Length; i++)
+                statuses[i] = new LinkStatus(targets[i].Id, targets[i].Kind, targets[i].IsHealthyWifi);
+            bool allOnWifi = LinkRouter.Plan(statuses.AsSpan(0, targets.Length), carries);
+
+            // More quality when Wi-Fi carries everyone; back to the Bluetooth-safe bitrate otherwise.
+            int wanted = allOnWifi ? AuraProtocol.WifiBitrate : AuraProtocol.Bitrate;
+            if (wanted != bitrate)
+                encoder.Bitrate = bitrate = wanted;
+
             long started = Stopwatch.GetTimestamp();
             int length = encoder.Encode(pcm.AsSpan(0, FrameLength), AuraProtocol.FrameSamples, packet, packet.Length);
             encoding += Stopwatch.GetElapsedTime(started);
             FramePool.Return(pcm);
 
             var frame = new EncodedFrame(sequence++, packet.AsSpan(0, length).ToArray());
-            ListenerLink[] targets;
-            lock (listeners)
-                targets = [.. listeners];
-            foreach (var target in targets)
-                target.Enqueue(frame);
+            for (int i = 0; i < targets.Length; i++)
+                if (carries[i]) // a Bluetooth link idles behind its phone's healthy Wi-Fi link
+                    targets[i].Enqueue(frame);
 
             if (++frames > 0 && Environment.TickCount64 - windowStart >= 5_000)
             {
                 // Must stay well under 20 ms per frame, or the listeners fall behind.
-                Log.Info(AuraLog.Tag, $"encode {encoding.TotalMilliseconds / frames:F1} ms/frame, backlog {toEncode.Reader.Count}");
+                Log.Info(AuraLog.Tag, $"encode {encoding.TotalMilliseconds / frames:F1} ms/frame at {bitrate / 1000} kbps, backlog {toEncode.Reader.Count}");
                 windowStart = Environment.TickCount64;
                 encoding = TimeSpan.Zero;
                 frames = 0;

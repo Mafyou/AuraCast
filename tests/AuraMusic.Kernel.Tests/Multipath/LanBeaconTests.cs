@@ -48,4 +48,21 @@ public sealed class LanBeaconTests
 
         LanBeacon.TryDecode(datagram, out _).ShouldBeFalse();
     }
+
+    [Theory]
+    [InlineData("192.168.1.42", 24, "192.168.1.255")]
+    [InlineData("10.0.5.9", 8, "10.255.255.255")]
+    [InlineData("172.16.33.7", 20, "172.16.47.255")]
+    [InlineData("192.168.43.1", 32, "192.168.43.1")]
+    [InlineData("192.168.1.42", 0, "255.255.255.255")]
+    public void DirectedBroadcast_FillsTheHostBits(string address, int prefixLength, string expected)
+    {
+        LanBeacon.DirectedBroadcast(IPAddress.Parse(address), prefixLength).ShouldBe(IPAddress.Parse(expected));
+    }
+
+    [Fact]
+    public void DirectedBroadcast_IPv6_Throws()
+    {
+        Should.Throw<ArgumentException>(() => LanBeacon.DirectedBroadcast(IPAddress.IPv6Loopback, 64));
+    }
 }

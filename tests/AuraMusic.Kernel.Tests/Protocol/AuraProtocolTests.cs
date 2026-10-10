@@ -31,9 +31,9 @@ public sealed class AuraProtocolTests
     [Fact]
     public void ReadHeader_OtherVersion_ThrowsWithAClearMessage()
     {
-        using var stream = new MemoryStream([.. "AURA"u8, 1]);
+        using var stream = new MemoryStream([.. "AURA"u8, 2]);
 
-        Should.Throw<InvalidDataException>(() => AuraProtocol.ReadHeader(stream)).Message.ShouldContain("1");
+        Should.Throw<InvalidDataException>(() => AuraProtocol.ReadHeader(stream)).Message.ShouldContain("2");
     }
 
     [Fact]
@@ -100,31 +100,55 @@ public sealed class AuraProtocolTests
         Should.Throw<EndOfStreamException>(() => AuraProtocol.ReadFrame(stream, new byte[AuraProtocol.MaxPacketSize], out _));
     }
 
+    [Fact]
+    public void KeepAlive_ReadsAsAnEmptyFrame()
+    {
+        using var stream = new MemoryStream();
+        AuraProtocol.WriteKeepAlive(stream);
+        AuraProtocol.WriteFrame(stream, 9, [5]);
+        stream.Position = 0;
+        var buffer = new byte[AuraProtocol.MaxPacketSize];
+
+        AuraProtocol.ReadFrame(stream, buffer, out _).ShouldBe(0);
+        AuraProtocol.ReadFrame(stream, buffer, out uint sequence).ShouldBe(1);
+        sequence.ShouldBe(9u);
+    }
+
     [Theory]
     [InlineData("Nord 2")]
     [InlineData("Téléphone de Léa 🎧")]
     [InlineData("")]
-    public void Hello_RoundTripsTheName(string name)
+    public void Hello_RoundTripsIdAndName(string name)
     {
+        var hello = new Hello(Guid.NewGuid(), name);
         using var stream = new MemoryStream();
 
-        AuraProtocol.WriteHello(stream, name);
+        AuraProtocol.WriteHello(stream, hello);
         stream.Position = 0;
 
-        AuraProtocol.ReadHello(stream).ShouldBe(name);
+        AuraProtocol.ReadHello(stream).ShouldBe(hello);
     }
 
     [Fact]
     public void Hello_LongName_IsCutWithoutBreakingACharacter()
     {
-        string name = new string('é', 40); // 80 UTF-8 bytes
+        var hello = new Hello(Guid.NewGuid(), new string('é', 40)); // 80 UTF-8 bytes
         using var stream = new MemoryStream();
 
-        AuraProtocol.WriteHello(stream, name);
+        AuraProtocol.WriteHello(stream, hello);
         stream.Position = 0;
         var read = AuraProtocol.ReadHello(stream);
 
-        Encoding.UTF8.GetByteCount(read).ShouldBeLessThanOrEqualTo(AuraProtocol.MaxNameBytes);
-        name.ShouldStartWith(read);
+        read.Id.ShouldBe(hello.Id);
+        Encoding.UTF8.GetByteCount(read.Name).ShouldBeLessThanOrEqualTo(AuraProtocol.MaxNameBytes);
+        hello.Name.ShouldStartWith(read.Name);
+    }
+
+    [Fact]
+    public void ReadHello_Truncated_Throws()
+    {
+        using var stream = new MemoryStream(new byte[10]);
+
+        Should.Throw<EndOfStreamException>(() => AuraProtocol.ReadHello(stream));
     }
 }
