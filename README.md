@@ -13,6 +13,8 @@ Le téléphone **master** joue sa musique (YouTube Music, Spotify, n'importe que
 
 L'écran peut être éteint des deux côtés. La notification permet d'arrêter.
 
+Hors de la maison, sans Wi-Fi commun : l'un active son partage de connexion et l'autre s'y connecte. Les deux téléphones sont alors sur le même réseau et le son passe en Wi-Fi, avec le Bluetooth en secours.
+
 ## Fonctionnement
 
 ```

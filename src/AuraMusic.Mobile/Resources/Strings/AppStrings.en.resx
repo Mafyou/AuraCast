@@ -39,6 +39,8 @@
   <data name="TutorialBroadcastText" xml:space="preserve"><value>Whoever has the music taps “Share my sound” and accepts the permissions. Android calls it “screen recording”: that is how it lets AuraMusic capture the sound, nothing is recorded. Then play your music, in any app.</value></data>
   <data name="TutorialListenTitle" xml:space="preserve"><value>Tune in</value></data>
   <data name="TutorialListenText" xml:space="preserve"><value>The others tap “Listen”: their phone finds the broadcaster on its own and reconnects if you drift apart. The screen can be off.</value></data>
+  <data name="TutorialAnywhereTitle" xml:space="preserve"><value>Anywhere</value></data>
+  <data name="TutorialAnywhereText" xml:space="preserve"><value>The sound travels over Wi-Fi and Bluetooth at once: if one drops, the other takes over. No Wi-Fi around? One of you turns on their hotspot, the other joins it: you get Wi-Fi quality anywhere. The music goes from one phone to the other, never through the internet.</value></data>
   <data name="TutorialTipsTitle" xml:space="preserve"><value>Tips</value></data>
   <data name="TutorialTipsText" xml:space="preserve"><value>Stay within a few meters. The sound arrives slightly delayed: in the same room, everyone wears headphones to avoid echo. Up to 3 or 4 phones can listen at once. Pull the home screen down to check for an update.</value></data>
   <data name="NotificationBroadcasting" xml:space="preserve"><value>Sharing your sound</value></data>

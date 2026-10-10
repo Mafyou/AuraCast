@@ -12,6 +12,7 @@ namespace AuraMusic.Mobile
             new("🔗", AppStrings.TutorialPairTitle, AppStrings.TutorialPairText),
             new("📡", AppStrings.TutorialBroadcastTitle, AppStrings.TutorialBroadcastText),
             new("🎧", AppStrings.TutorialListenTitle, AppStrings.TutorialListenText),
+            new("📶", AppStrings.TutorialAnywhereTitle, AppStrings.TutorialAnywhereText),
             new("💡", AppStrings.TutorialTipsTitle, AppStrings.TutorialTipsText),
         ];
 
