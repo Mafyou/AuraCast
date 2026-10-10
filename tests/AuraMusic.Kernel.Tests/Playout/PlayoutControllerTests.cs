@@ -136,6 +136,45 @@ public sealed class PlayoutControllerTests
     }
 
     [Fact]
+    public void Next_BurstOnAnOtherwiseSteadyBacklog_IsNotCaughtUpOn()
+    {
+        var controller = CreateController();
+        for (int i = 0; i < 100; i++)
+            controller.Next(packet, backlog: 2);
+
+        // Bluetooth just delivered ten packets at once: a peak, not a lag.
+        var steps = Enumerable.Range(0, 10).Select(i => controller.Next(packet, backlog: 8 - i % 8)).ToList();
+
+        steps.ShouldAllBe(step => !IsCatchUp(step));
+        metrics.Verify(m => m.CaughtUp(), Times.Never);
+    }
+
+    [Fact]
+    public void Next_BacklogStayingHigh_IsCaughtUpOn()
+    {
+        var controller = CreateController();
+        for (int i = 0; i < 100; i++)
+            controller.Next(packet, backlog: 2);
+
+        var steps = Enumerable.Range(0, 200).Select(_ => controller.Next(packet, backlog: 7)).ToList();
+
+        (steps[0] is Play).ShouldBeTrue();
+        (steps[^1] is CatchUp).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Next_AfterRebuffer_JudgesTheBacklogAfresh()
+    {
+        var controller = CreateController();
+        for (int i = 0; i < 100; i++)
+            controller.Next(packet, backlog: 7);
+        for (int i = 0; i < 4; i++)
+            controller.Next(null, backlog: 0);
+
+        (controller.Next(packet, backlog: 2) is Play).ShouldBeTrue();
+    }
+
+    [Fact]
     public void CatchUpEveryFrames_NotPositive_Throws()
     {
         Should.Throw<ArgumentOutOfRangeException>(() => new PlayoutController(metrics.Object) { CatchUpEveryFrames = 0 });

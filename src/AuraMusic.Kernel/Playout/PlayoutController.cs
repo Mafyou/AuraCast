@@ -14,7 +14,8 @@ public sealed class PlayoutController(IPlayoutMetrics metrics)
 
     /// <summary>
     /// Above this backlog we are lagging: some packets are played slightly shorter until we are back on time.
-    /// Keep it well above <see cref="PrebufferFrames"/> so normal jitter does not trigger it.
+    /// Compared with the backlog's trend, not its value of the moment: a link that delivers in bursts
+    /// (Bluetooth) peaks well above its average at every burst, and shortening on those peaks is heard.
     /// </summary>
     public int CatchUpAboveFrames
     {
@@ -60,8 +61,16 @@ public sealed class PlayoutController(IPlayoutMetrics metrics)
         MaxBacklogFrames = prebufferFrames + PlayoutTuning.SkipMarginFrames;
     }
 
+    // The backlog jumps by a whole burst when one arrives: follow its trend (about a second), not that.
+    const double BacklogSmoothing = 0.02;
+
+    /// <summary>The buffer was just brought back to its cushion by hand (after a stall): judge the backlog afresh.</summary>
+    public void Resynced() => trendPrimed = false;
+
     int concealedInARow;
     int sinceCatchUp = int.MaxValue / 2;
+    double backlogTrend;
+    bool trendPrimed;
 
     /// <param name="packet">The next packet, or <see langword="null"/> when it did not arrive in time.</param>
     /// <param name="backlog">Packets still waiting in the jitter buffer after this one.</param>
@@ -72,6 +81,7 @@ public sealed class PlayoutController(IPlayoutMetrics metrics)
             if (++concealedInARow > MaxConcealedFrames)
             {
                 concealedInARow = 0;
+                trendPrimed = false; // playback restarts from a fresh buffer
                 metrics.Rebuffered();
                 return new Rebuffer();
             }
@@ -81,12 +91,14 @@ public sealed class PlayoutController(IPlayoutMetrics metrics)
 
         concealedInARow = 0;
         sinceCatchUp++;
+        backlogTrend = trendPrimed ? backlogTrend + (backlog - backlogTrend) * BacklogSmoothing : backlog;
+        trendPrimed = true;
         if (backlog > MaxBacklogFrames)
         {
             metrics.Skipped();
             return new Skip(packet);
         }
-        if (backlog > CatchUpAboveFrames && sinceCatchUp >= CatchUpEveryFrames)
+        if (backlogTrend > CatchUpAboveFrames && sinceCatchUp >= CatchUpEveryFrames)
         {
             sinceCatchUp = 0;
             metrics.CaughtUp();

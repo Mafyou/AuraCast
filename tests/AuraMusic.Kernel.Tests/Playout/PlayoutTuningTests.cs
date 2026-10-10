@@ -37,7 +37,7 @@ public sealed class PlayoutTuningTests : IDisposable
 
     [Theory]
     [InlineData(Links.Bluetooth, 200, PlayoutTuning.BluetoothMinLatencyMs)] // bursts and radio scans need more in hand
-    [InlineData(Links.Bluetooth, 400, 400)]
+    [InlineData(Links.Bluetooth, 500, 500)]
     [InlineData(Links.Wifi, 200, 200)]
     [InlineData(Links.Wifi | Links.Bluetooth, 100, 100)]
     [InlineData(Links.None, 200, 200)]

@@ -9,14 +9,15 @@ readonly record struct EncodedFrame(uint Sequence, byte[] Packet);
 /// </summary>
 sealed class ListenerLink(Stream input, Stream output, Links kind, Action close) : IDisposable
 {
-    const int QueueCapacity = 25;
+    const int QueueCapacity = 50;
     const int MaxFramesPerWrite = 10;
     // A Wi-Fi link whose queue stays this short delivers in real time.
     const int HealthyQueueDepth = 2;
     static readonly TimeSpan HealthyAfter = TimeSpan.FromSeconds(3);
     static readonly TimeSpan KeepAliveInterval = TimeSpan.FromSeconds(1);
 
-    // ~500 ms of audio; beyond that we drop the oldest frames rather than drift behind.
+    // A second of audio, to lose nothing over a radio stall (the listener gets back in step by itself);
+    // beyond that the oldest frames are dropped rather than drift behind.
     readonly Channel<EncodedFrame> queue = Channel.CreateBounded<EncodedFrame>(
         new BoundedChannelOptions(QueueCapacity) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true, SingleWriter = true });
     Hello? hello;

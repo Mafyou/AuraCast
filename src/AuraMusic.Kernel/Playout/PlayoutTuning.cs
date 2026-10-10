@@ -20,11 +20,14 @@ public static class PlayoutTuning
     /// </summary>
     public const int MinCushionFrames = 2;
 
-    /// <summary>Backlog above the cushion at which playback catches up by shortening packets.</summary>
-    public const int CatchUpMarginFrames = 6;
+    /// <summary>
+    /// Backlog above the cushion at which playback catches up by shortening packets. Well above: a smaller
+    /// excess is played off by the drift correction, which cannot be heard.
+    /// </summary>
+    public const int CatchUpMarginFrames = 15;
 
     /// <summary>Backlog above the cushion at which a packet is dropped outright.</summary>
-    public const int SkipMarginFrames = 20;
+    public const int SkipMarginFrames = 30;
 
     static volatile int targetLatencyMs = DefaultLatencyMs;
 
@@ -36,10 +39,11 @@ public static class PlayoutTuning
     }
 
     /// <summary>
-    /// Bluetooth alone delivers in bursts, and stalls for a few hundred milliseconds every time the phone's
-    /// shared radio scans for Wi-Fi (about every ten seconds): it needs this much in hand whatever the setting.
+    /// Bluetooth alone delivers in bursts and, measured between two phones in a quiet flat, stalls for 200 to
+    /// 450 ms every few seconds: it needs this much in hand whatever the setting. <see cref="AdaptiveLatency"/>
+    /// adds to it where the radio is busier.
     /// </summary>
-    public const int BluetoothMinLatencyMs = 320;
+    public const int BluetoothMinLatencyMs = 500;
 
     /// <summary>The setting, raised to what the links in use can sustain.</summary>
     public static int LatencyFor(Links links) =>

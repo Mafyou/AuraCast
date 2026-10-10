@@ -37,8 +37,9 @@ Hors de la maison, sans Wi-Fi commun : l'un active son partage de connexion et l
 - **Liens morts** : le master envoie un signal de vie chaque seconde quand il n'y a pas de son ; un lien muet 5 s est fermé et se reconnecte.
 - **Protocole** (v3) : le master envoie un en-tête `AURA` + version + identifiant de session, l'auditeur répond par un « hello » (identifiant du téléphone + nom), puis viennent des paquets Opus préfixés par leur longueur et leur numéro, et des trames vides en signal de vie (`src/AuraMusic.Kernel/Protocol/AuraProtocol.cs`).
 - **Lecture** : thread en priorité audio Android, sortie en virgule flottante. Un paquet en retard n'est comblé (dissimulation d'Opus) que si la sortie audio va manquer de son ; un retard accumulé est rattrapé en raccourcissant les trames de 1 ms avec un fondu, sans clic.
+- **Blocages radio** : en Bluetooth seul la liaison se fige de 200 à 450 ms toutes les quelques secondes (mesuré entre deux téléphones au calme), et davantage dans une pièce pleine de monde. Le délai y est donc d'au moins 500 ms. Si la lecture tombe quand même à sec, le son est coupé une fois, proprement : le délai est relevé de ce qu'il a manqué (`AdaptiveLatency`, jusqu'à 400 ms de plus), le tampon se remplit, la liaison finit de déverser son retard et l'excédent est écarté, le tout pendant le silence. Le blocage suivant de même taille ne s'entend plus. Le délai redescend après cinq minutes de calme. Le rattrapage par raccourcissement de trames ne sert plus qu'aux gros excédents, jugés sur la tendance du tampon et non sur ses pointes.
 - **Dérive d'horloge** : les quartz des deux téléphones ne battent pas exactement à la même vitesse. `DriftController` surveille le son en attente et ajuste la vitesse de lecture d'au plus ±0,3 % (inaudible) pour le garder sur la cible, au lieu de laisser le tampon se vider ou déborder au fil des minutes.
-- **Curseur de synchro** : pendant l'écoute, un curseur règle le délai total de 100 à 500 ms (200 par défaut) ; la cible n'est jamais plus basse que ce que la sortie audio du téléphone permet, plus deux paquets d'avance. En Bluetooth seul, elle ne descend pas sous 320 ms : la liaison arrive par rafales et se fige quelques centaines de millisecondes à chaque balayage Wi-Fi du téléphone. À gauche, le son colle à celui du master (même pièce) ; à droite, il encaisse mieux les à-coups radio. Le réglage s'applique en direct et est mémorisé (`PlayoutTuning`).
+- **Curseur de synchro** : pendant l'écoute, un curseur règle le délai total de 100 à 500 ms (200 par défaut) ; la cible n'est jamais plus basse que ce que la sortie audio du téléphone permet, plus deux paquets d'avance. En Bluetooth seul, elle ne descend pas sous 500 ms (voir « Blocages radio »). À gauche, le son colle à celui du master (même pièce) ; à droite, il encaisse mieux les à-coups radio. Le réglage s'applique en direct et est mémorisé (`PlayoutTuning`).
 - **Diagnostic** : un double appui sur l'image de l'accueil ouvre un écran de chiffres en direct (codec, débit, trames par seconde de chaque lien, tampon, dérive, pertes), fourni par `DiagnosticsHub`.
 - **Plusieurs auditeurs** : chaque connexion a sa propre file d'envoi. À 96 kbps, la liaison garde de la marge pour plusieurs téléphones (le Bluetooth classique accepte au plus 7 appareils connectés au master).
 - **Spectre** : pendant la diffusion ou l'écoute, 16 bandes de fréquences façon Matrix (FFT maison dans le Kernel).
@@ -51,7 +52,7 @@ Hors de la maison, sans Wi-Fi commun : l'un active son partage de connexion et l
 - `src/AuraMusic.Kernel` : la logique sans dépendance Android, testable.
   - `State/` : l'état de l'app, une union `AuraState` publiée par `AuraHub` ;
   - `Protocol/` : le format des données échangées ;
-  - `Playout/` : `PlayoutController`, qui décide toutes les 20 ms de jouer, rattraper, combler, sauter ou rebufferiser (une union `PlayoutStep`), `PcmCrossfade`, `DriftController` (dérive d'horloge) et `PlayoutTuning` (délai choisi au curseur) ;
+  - `Playout/` : `PlayoutController`, qui décide toutes les 20 ms de jouer, rattraper, combler, sauter ou rebufferiser (une union `PlayoutStep`), `PcmCrossfade`, `DriftController` (dérive d'horloge), `AdaptiveLatency` (délai appris des blocages) et `PlayoutTuning` (délai choisi au curseur) ;
   - `Diagnostics/` : les relevés du master et de l'écoute (une union `DiagnosticsReport`) et leur mise en texte ;
   - `Spectrum/` : l'analyseur de spectre ;
   - `Updates/` : lecture de la dernière release GitHub et comparaison des versions (une union `UpdateCheck`) ;
@@ -83,7 +84,7 @@ adb logcat -s AuraMusic
 ```
 
 - côté master : `tx … frames/s, … frames/write, … ms/write, queued, dropped` ;
-- côté écoute : `rx … frames/s, … kbps, concealed, skipped, rebuffers, dropped`.
+- côté écoute : `rx … frames/s, … kbps, buffer, drift, caught up, concealed, skipped, rebuffers, dropped, underruns, longest gap, gc` (`underruns` : la sortie audio est tombée à sec ; `longest gap` : plus long intervalle entre deux paquets joués).
 
 50 trames/s veut dire que la liaison suit le temps réel.
 
