@@ -17,12 +17,41 @@ public sealed class PlayoutTuningTests : IDisposable
 
     [Theory]
     [InlineData(200, 7)]
-    [InlineData(80, 1)]
+    [InlineData(100, 2)]
     [InlineData(500, 22)]
-    [InlineData(60, 1)]
+    [InlineData(60, PlayoutTuning.MinCushionFrames)]
     public void CushionFrames_LeaveTheOutputItsShare(int latencyMs, int expectedFrames)
     {
         PlayoutTuning.CushionFrames(latencyMs).ShouldBe(expectedFrames);
+    }
+
+    [Theory]
+    [InlineData(200, 60, 200)]
+    [InlineData(100, 60, 100)]
+    [InlineData(100, 120, 160)] // the phone's output holds 120 ms whatever is asked: two packets on top, no less
+    [InlineData(200, 120, 200)]
+    public void ReachableLatency_NeverAimsBelowWhatThePhoneCanDo(int latencyMs, int outputMs, int expectedMs)
+    {
+        PlayoutTuning.ReachableLatencyMs(latencyMs, outputMs).ShouldBe(expectedMs);
+    }
+
+    [Theory]
+    [InlineData(Links.Bluetooth, 200, PlayoutTuning.BluetoothMinLatencyMs)] // bursts and radio scans need more in hand
+    [InlineData(Links.Bluetooth, 400, 400)]
+    [InlineData(Links.Wifi, 200, 200)]
+    [InlineData(Links.Wifi | Links.Bluetooth, 100, 100)]
+    [InlineData(Links.None, 200, 200)]
+    public void LatencyFor_RaisesTheSettingOnBluetoothAlone(Links links, int setting, int expectedMs)
+    {
+        PlayoutTuning.TargetLatencyMs = setting;
+
+        PlayoutTuning.LatencyFor(links).ShouldBe(expectedMs);
+    }
+
+    [Fact]
+    public void MinLatency_IsReachableWithTheUsualOutput()
+    {
+        PlayoutTuning.ReachableLatencyMs(PlayoutTuning.MinLatencyMs).ShouldBe(PlayoutTuning.MinLatencyMs);
     }
 
     [Fact]

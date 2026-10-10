@@ -6,13 +6,19 @@ namespace AuraMusic.Kernel.Playout;
 /// </summary>
 public static class PlayoutTuning
 {
-    public const int MinLatencyMs = 80;
+    public const int MinLatencyMs = OutputShareMs + MinCushionFrames * FrameMs;
     public const int MaxLatencyMs = 500;
     public const int DefaultLatencyMs = 200;
     public const int FrameMs = 20;
 
     /// <summary>Of the total latency, the part that sits in the audio output rather than in the jitter buffer.</summary>
     public const int OutputShareMs = 60;
+
+    /// <summary>
+    /// The jitter buffer never aims below this: with a single packet in hand, the slightest radio delay runs
+    /// it dry and the sound stops every few seconds.
+    /// </summary>
+    public const int MinCushionFrames = 2;
 
     /// <summary>Backlog above the cushion at which playback catches up by shortening packets.</summary>
     public const int CatchUpMarginFrames = 6;
@@ -29,6 +35,25 @@ public static class PlayoutTuning
         set => targetLatencyMs = Math.Clamp(value, MinLatencyMs, MaxLatencyMs);
     }
 
+    /// <summary>
+    /// Bluetooth alone delivers in bursts, and stalls for a few hundred milliseconds every time the phone's
+    /// shared radio scans for Wi-Fi (about every ten seconds): it needs this much in hand whatever the setting.
+    /// </summary>
+    public const int BluetoothMinLatencyMs = 320;
+
+    /// <summary>The setting, raised to what the links in use can sustain.</summary>
+    public static int LatencyFor(Links links) =>
+        links == Links.Bluetooth ? Math.Max(TargetLatencyMs, BluetoothMinLatencyMs) : TargetLatencyMs;
+
     /// <summary>Packets to hold in the jitter buffer for a given total latency.</summary>
-    public static int CushionFrames(int latencyMs) => Math.Max(1, (latencyMs - OutputShareMs) / FrameMs);
+    /// <param name="outputMs">What the audio output really holds: a phone may refuse a buffer as small as asked.</param>
+    public static int CushionFrames(int latencyMs, int outputMs = OutputShareMs) =>
+        Math.Max(MinCushionFrames, (latencyMs - outputMs) / FrameMs);
+
+    /// <summary>
+    /// The latency actually aimed for: the wish, raised to what this phone's output and the smallest cushion
+    /// allow. Aiming lower would have the drift controller speed up for ever, emptying the buffer again and again.
+    /// </summary>
+    public static int ReachableLatencyMs(int latencyMs, int outputMs = OutputShareMs) =>
+        outputMs + CushionFrames(latencyMs, outputMs) * FrameMs;
 }
