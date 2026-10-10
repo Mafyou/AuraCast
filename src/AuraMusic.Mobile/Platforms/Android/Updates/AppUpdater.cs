@@ -5,7 +5,10 @@ public static class AppUpdater
 {
     const string ApkMimeType = "application/vnd.android.package-archive";
 
-    static readonly HttpClient Http = new();
+    // No global timeout: the 40 MB APK can take longer than HttpClient's default 100 s on a slow network.
+    // The check has its own short one.
+    static readonly HttpClient Http = new() { Timeout = Timeout.InfiniteTimeSpan };
+    static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(15);
     static readonly UpdateChecker Checker = new(new GitHubReleaseFeed(Http, "Mafyou", "AuraMusic"));
 
     // Downloaded while AuraMusic was not yet allowed to install apps: installed when the user comes back.
@@ -17,8 +20,15 @@ public static class AppUpdater
         // Local builds are signed with the debug key: a release could not be installed over them anyway.
         return Task.FromResult<UpdateCheck>(new UpToDate());
 #else
-        return Checker.CheckAsync(AppInfo.Current.VersionString, stoppingToken);
+        return CheckWithTimeoutAsync(stoppingToken);
 #endif
+    }
+
+    static async Task<UpdateCheck> CheckWithTimeoutAsync(CancellationToken stoppingToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+        timeout.CancelAfter(CheckTimeout);
+        return await Checker.CheckAsync(AppInfo.Current.VersionString, timeout.Token);
     }
 
     /// <summary>Android asks once per app before it may install others.</summary>

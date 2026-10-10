@@ -19,9 +19,16 @@ public sealed class BroadcastService : Service
     // About a third of the CPU of complexity 10, so no phone falls behind; the difference is not audible.
     const int EncoderComplexity = 5;
 
-    // Up to 500 ms of captured audio waiting for the encoder; past that the oldest is dropped.
+    const int FrameLength = AuraProtocol.FrameSamples * AuraProtocol.Channels;
+
+    // Captured frames are rented, not allocated: 50 fresh arrays a second kept the GC busy, and on Android
+    // every .NET collection also stops the Java side, audio threads included.
+    static readonly ArrayPool<short> FramePool = ArrayPool<short>.Shared;
+
+    // Up to 500 ms of captured audio waiting for the encoder; past that the oldest is dropped (and returned).
     readonly Channel<short[]> toEncode = Channel.CreateBounded<short[]>(
-        new BoundedChannelOptions(25) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true, SingleWriter = true });
+        new BoundedChannelOptions(25) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true, SingleWriter = true },
+        dropped => FramePool.Return(dropped));
     BluetoothServerSocket? server;
 
     public override IBinder? OnBind(Intent? intent) => null;
@@ -117,11 +124,17 @@ public sealed class BroadcastService : Service
             }
             catch (Java.IO.IOException ex)
             {
-                AuraHub.Publish(new Failed(string.Format(CultureInfo.CurrentCulture, AppStrings.ErrorConnectionLost, ex.Message)));
+                // Usually Bluetooth being turned off. Without a server nobody can join any more: stop for real
+                // instead of capturing and encoding in the background behind an "error" screen.
+                var adapter = ((BluetoothManager)GetSystemService(BluetoothService)!).Adapter;
+                AuraHub.Publish(new Failed(adapter is { IsEnabled: true }
+                    ? string.Format(CultureInfo.CurrentCulture, AppStrings.ErrorConnectionLost, ex.Message)
+                    : AppStrings.ErrorBluetoothOffBroadcast));
+                StopSelf();
                 return;
             }
 
-            var link = new ListenerLink(socket);
+            var link = new ListenerLink(socket, socket.RemoteDevice?.Name ?? "?");
             lock (listeners)
                 listeners.Add(link);
             PublishListeners();
@@ -139,10 +152,10 @@ public sealed class BroadcastService : Service
 
     void PublishListeners()
     {
-        int count;
+        ImmutableArray<string> names;
         lock (listeners)
-            count = listeners.Count;
-        AuraHub.Publish(count == 0 ? new Advertising() : new Streaming(count));
+            names = [.. listeners.Select(link => link.Name)];
+        AuraHub.Publish(names.IsEmpty ? new Advertising() : new Streaming(names));
     }
 
     void CaptureLoop(CancellationToken stoppingToken)
@@ -157,30 +170,32 @@ public sealed class BroadcastService : Service
         recorder!.StartRecording();
         while (!stoppingToken.IsCancellationRequested)
         {
-            var pcm = new short[AuraProtocol.FrameSamples * AuraProtocol.Channels];
-            for (int read = 0; read < pcm.Length;)
+            var pcm = FramePool.Rent(FrameLength); // may be longer than a frame: only FrameLength is used
+            for (int read = 0; read < FrameLength;)
             {
-                int count = recorder.Read(pcm, read, pcm.Length - read);
+                int count = recorder.Read(pcm, read, FrameLength - read);
                 if (count <= 0)
                 {
+                    FramePool.Return(pcm);
                     toEncode.Writer.TryComplete();
                     return; // stopped, or the recorder died
                 }
                 read += count;
             }
 
-            if (++captured % 2 == 0) // the visualizer only needs 25 updates a second
+            // The visualizer only needs 25 updates a second, and none while nothing shows it.
+            if (++captured % 2 == 0 && SpectrumHub.IsObserved)
             {
                 var levels = new float[SpectrumHub.Bands];
-                analyzer.Analyze(pcm, levels);
+                analyzer.Analyze(pcm.AsSpan(0, FrameLength), levels);
                 SpectrumHub.Publish(levels);
             }
 
             bool anyListener;
             lock (listeners)
                 anyListener = listeners.Count > 0;
-            if (anyListener)
-                toEncode.Writer.TryWrite(pcm);
+            if (!anyListener || !toEncode.Writer.TryWrite(pcm))
+                FramePool.Return(pcm);
         }
         toEncode.Writer.TryComplete();
     }
@@ -204,8 +219,9 @@ public sealed class BroadcastService : Service
         await foreach (var pcm in toEncode.Reader.ReadAllAsync(stoppingToken))
         {
             long started = Stopwatch.GetTimestamp();
-            int length = encoder.Encode(pcm, AuraProtocol.FrameSamples, packet, packet.Length);
+            int length = encoder.Encode(pcm.AsSpan(0, FrameLength), AuraProtocol.FrameSamples, packet, packet.Length);
             encoding += Stopwatch.GetElapsedTime(started);
+            FramePool.Return(pcm);
 
             var frame = packet.AsSpan(0, length).ToArray();
             ListenerLink[] targets;
@@ -249,8 +265,11 @@ public sealed class BroadcastService : Service
     }
 
     /// <summary>One connected listener, with its own small queue so a slow Bluetooth link never stalls the capture.</summary>
-    sealed class ListenerLink(BluetoothSocket socket) : IDisposable
+    sealed class ListenerLink(BluetoothSocket socket, string name) : IDisposable
     {
+        /// <summary>The listener's phone, as shown on the master's screen.</summary>
+        public string Name => name;
+
         const int QueueCapacity = 25;
         const int MaxFramesPerWrite = 10;
 

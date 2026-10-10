@@ -10,10 +10,10 @@ public sealed class AuraHubTests
         AuraHub.StateChanged += OnChanged;
         try
         {
-            AuraHub.Publish(new Streaming(2));
+            AuraHub.Publish(new Streaming(["Nord 2", "OnePlus 7 Pro"]));
 
-            (AuraHub.Current is Streaming { Listeners: 2 }).ShouldBeTrue();
-            (received is Streaming { Listeners: 2 }).ShouldBeTrue();
+            (AuraHub.Current is Streaming { Count: 2 }).ShouldBeTrue();
+            (received is Streaming { Count: 2 }).ShouldBeTrue();
         }
         finally
         {
@@ -22,18 +22,26 @@ public sealed class AuraHubTests
         }
     }
 
-    [Theory]
-    [InlineData(1, "1 personne")]
-    [InlineData(3, "3 personnes")]
-    public void States_PatternMatchExhaustively(int listeners, string expected)
+    [Fact]
+    public void Streaming_KeepsTheListenersNames()
     {
-        AuraState state = new Streaming(listeners);
+        var streaming = new Streaming(["Nord 2", "OnePlus 7 Pro"]);
+
+        streaming.Count.ShouldBe(2);
+        streaming.Listeners.ShouldBe(["Nord 2", "OnePlus 7 Pro"]);
+    }
+
+    [Theory]
+    [InlineData(new[] { "Nord 2" }, "1 : Nord 2")]
+    [InlineData(new[] { "Nord 2", "OnePlus 7 Pro" }, "2 : Nord 2, OnePlus 7 Pro")]
+    public void States_PatternMatchExhaustively(string[] names, string expected)
+    {
+        AuraState state = new Streaming([.. names]);
 
         var text = state switch
         {
             Idle or Advertising or Searching => "",
-            Streaming(1) => "1 personne",
-            Streaming(var count) => $"{count} personnes",
+            Streaming(var listeners) => $"{listeners.Length} : {string.Join(", ", listeners)}",
             Listening(var master) => master,
             Failed(var reason) => reason,
         };

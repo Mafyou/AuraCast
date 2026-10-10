@@ -57,4 +57,5 @@
   <data name="UpdateUpToDate" xml:space="preserve"><value>You already have the latest version ({0}).</value></data>
   <data name="UpdateCheckFailed" xml:space="preserve"><value>Could not check for updates: {0}</value></data>
   <data name="UpdateCheckTitle" xml:space="preserve"><value>Updates</value></data>
+  <data name="HintStreamingWith" xml:space="preserve"><value>Listening: {0}. Play your music in any app: it is shared live.</value></data>
 </root>

@@ -2,7 +2,13 @@ namespace AuraMusic.Kernel.State;
 
 public sealed record Idle;
 public sealed record Advertising;
-public sealed record Streaming(int Listeners);
+
+/// <param name="Listeners">The names of the connected listeners' phones, as Bluetooth reports them.</param>
+public sealed record Streaming(ImmutableArray<string> Listeners)
+{
+    public int Count => Listeners.Length;
+}
+
 public sealed record Searching;
 public sealed record Listening(string Master);
 public sealed record Failed(string Reason);

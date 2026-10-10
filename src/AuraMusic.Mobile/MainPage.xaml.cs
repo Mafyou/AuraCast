@@ -3,7 +3,7 @@
     public partial class MainPage : ContentPage
     {
         // Only on launch, not when the page is rebuilt after a language switch.
-        static bool splashShown, updateOffered;
+        static bool splashShown, updateOffered, updating;
 
         public MainPage()
         {
@@ -60,8 +60,8 @@
             {
                 Idle => (AppStrings.StatusIdle, AppStrings.HintIdle),
                 Advertising => (AppStrings.StatusAdvertising, AppStrings.HintAdvertising),
-                Streaming(1) => (AppStrings.StatusStreamingOne, AppStrings.HintStreaming),
-                Streaming(var listeners) => (Format(AppStrings.StatusStreamingMany, listeners), AppStrings.HintStreaming),
+                Streaming(var names) => (names.Length == 1 ? AppStrings.StatusStreamingOne : Format(AppStrings.StatusStreamingMany, names.Length),
+                    Format(AppStrings.HintStreamingWith, string.Join(", ", names))),
                 Searching => (AppStrings.StatusSearching, AppStrings.HintSearching),
                 Listening(var master) => (Format(AppStrings.StatusListening, master), AppStrings.HintListening),
                 Failed(var reason) => (AppStrings.StatusFailed, reason),
@@ -86,7 +86,8 @@
         {
             try
             {
-                await OfferUpdateAsync(onDemand: true);
+                if (!updating)
+                    await OfferUpdateAsync(onDemand: true);
             }
             finally
             {
@@ -96,6 +97,19 @@
 
         /// <param name="onDemand">Pulled by the user: say so when there is nothing new, instead of staying silent.</param>
         async Task OfferUpdateAsync(bool onDemand)
+        {
+            updating = true;
+            try
+            {
+                await CheckAndInstallAsync(onDemand);
+            }
+            finally
+            {
+                updating = false;
+            }
+        }
+
+        async Task CheckAndInstallAsync(bool onDemand)
         {
             var check = await AppUpdater.CheckAsync(CancellationToken.None);
             if (check is not UpdateAvailable(var release))
@@ -122,7 +136,7 @@
                 else if (await MatrixDialog.ShowAsync(this, AppStrings.UpdateTitle, AppStrings.UpdateAllowInstall, AppStrings.UpdateOpenSettings))
                     AppUpdater.InstallWhenAllowed(apk); // resumed by App.OnResume when the user comes back
             }
-            catch (Exception ex) when (ex is HttpRequestException or IOException or Java.Lang.Exception)
+            catch (Exception ex) when (ex is HttpRequestException or IOException or System.OperationCanceledException or Java.Lang.Exception)
             {
                 await MatrixDialog.ShowAsync(this, AppStrings.UpdateTitle, Format(AppStrings.UpdateFailed, ex.Message), "OK");
             }

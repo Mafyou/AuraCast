@@ -22,7 +22,13 @@ public sealed class ListenService : Service
     static readonly FrozenSet<MajorDeviceClass> MasterDeviceClasses = [MajorDeviceClass.Phone, MajorDeviceClass.Computer];
     const string LastMasterKey = "lastMasterAddress";
 
+    // Spectrum levels waiting for their audio to be played; bounded in case the AudioTrack stalls.
+    const int MaxPendingLevels = 50;
+
     CancellationTokenSource? cts;
+    readonly OutputGain gain = new();
+    AudioFocusRequestClass? focusRequest;
+    NoisyReceiver? noisyReceiver;
 
     public override IBinder? OnBind(Intent? intent) => null;
 
@@ -37,6 +43,8 @@ public sealed class ListenService : Service
             return StartCommandResult.NotSticky;
 
         AuraNotifications.StartForeground(this, AppStrings.NotificationListening, ForegroundService.TypeMediaPlayback);
+        RequestAudioFocus();
+        WatchHeadphones();
 
         var adapter = ((BluetoothManager)GetSystemService(BluetoothService)!).Adapter;
         if (adapter is not { IsEnabled: true })
@@ -52,6 +60,31 @@ public sealed class ListenService : Service
         return StartCommandResult.NotSticky;
     }
 
+    /// <summary>Calls, navigation prompts or another music app lower or silence us instead of playing on top.</summary>
+    void RequestAudioFocus()
+    {
+        var audio = (AudioManager)GetSystemService(AudioService)!;
+        focusRequest = new AudioFocusRequestClass.Builder(AudioFocus.Gain)
+            .SetAudioAttributes(new AudioAttributes.Builder()!
+                .SetUsage(AudioUsageKind.Media)!
+                .SetContentType(AudioContentType.Music)!
+                .Build()!)!
+            .SetOnAudioFocusChangeListener(new FocusListener(gain))!
+            .Build()!;
+        audio.RequestAudioFocus(focusRequest);
+    }
+
+    /// <summary>Headphones unplugged or disconnected: stop rather than suddenly play out loud.</summary>
+    void WatchHeadphones()
+    {
+        noisyReceiver = new NoisyReceiver(StopSelf);
+        var filter = new IntentFilter(AudioManager.ActionAudioBecomingNoisy);
+        if (OperatingSystem.IsAndroidVersionAtLeast(33))
+            RegisterReceiver(noisyReceiver, filter, ReceiverFlags.NotExported);
+        else
+            RegisterReceiver(noisyReceiver, filter);
+    }
+
     async Task RunAsync(BluetoothAdapter adapter, CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
@@ -61,7 +94,7 @@ public sealed class ListenService : Service
                 AuraHub.Publish(new Searching());
                 using var socket = ConnectToMaster(adapter, stoppingToken);
                 if (socket is not null)
-                    Listen(socket, stoppingToken);
+                    Listen(socket, gain, stoppingToken);
             }
             catch (Exception) when (stoppingToken.IsCancellationRequested)
             {
@@ -90,6 +123,10 @@ public sealed class ListenService : Service
     /// <summary>Tries each paired phone (last master first) until one accepts on the AuraMusic service.</summary>
     static BluetoothSocket? ConnectToMaster(BluetoothAdapter adapter, CancellationToken stoppingToken)
     {
+        // Checked first: with Bluetooth off the paired list reads empty, which would wrongly ask to pair.
+        if (!adapter.IsEnabled)
+            throw new InvalidOperationException(AppStrings.ErrorBluetoothOffListen);
+
         var phones = adapter.BondedDevices?
             .Where(device => device.BluetoothClass is { } deviceClass && MasterDeviceClasses.Contains(deviceClass.MajorDeviceClass))
             .ToList() ?? [];
@@ -118,21 +155,21 @@ public sealed class ListenService : Service
         return null;
     }
 
-    static void Listen(BluetoothSocket socket, CancellationToken stoppingToken)
+    static void Listen(BluetoothSocket socket, OutputGain gain, CancellationToken stoppingToken)
     {
         using var closeOnStop = stoppingToken.Register(socket.Close);
         var stream = socket.InputStream!;
         AuraProtocol.ReadHeader(stream);
         AuraHub.Publish(new Listening(socket.RemoteDevice?.Name ?? "AuraMusic"));
-        Receive(stream, stoppingToken);
+        Receive(stream, gain, stoppingToken);
     }
 
-    static void Receive(System.IO.Stream stream, CancellationToken stoppingToken)
+    static void Receive(System.IO.Stream stream, OutputGain gain, CancellationToken stoppingToken)
     {
         var stats = new ReceiveStats();
         var packets = Channel.CreateBounded<byte[]>(
             new BoundedChannelOptions(MaxBufferedFrames) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true, SingleWriter = true });
-        var playback = new Thread(() => Play(packets.Reader, stats, stoppingToken)) { IsBackground = true, Name = "AuraMusic playback" };
+        var playback = new Thread(() => Play(packets.Reader, stats, gain, stoppingToken)) { IsBackground = true, Name = "AuraMusic playback" };
         playback.Start();
 
         try
@@ -158,7 +195,7 @@ public sealed class ListenService : Service
     /// Decodes on the playback clock, so a packet that is not there in time gets concealed by Opus
     /// instead of cutting the sound.
     /// </summary>
-    static void Play(ChannelReader<byte[]> packets, ReceiveStats stats, CancellationToken stoppingToken)
+    static void Play(ChannelReader<byte[]> packets, ReceiveStats stats, OutputGain gain, CancellationToken stoppingToken)
     {
         // A late wake-up of this thread starves the AudioTrack, which is heard as crackling:
         // run it at Android's audio priority, like any music player (not urgent-audio, which is the mixer's).
@@ -189,6 +226,7 @@ public sealed class ListenService : Service
         // Levels wait here until their audio actually comes out of the speaker, so the visualizer is in sync.
         var pendingLevels = new Queue<(uint PlayedAt, float[] Levels)>();
         uint written = 0; // sample frames handed to the AudioTrack; wraps like its playback head
+        float volume = 1;
         track.Play();
         try
         {
@@ -219,13 +257,20 @@ public sealed class ListenService : Service
                         continue;
                 }
 
+                if (gain.Value != volume)
+                    track.SetVolume(volume = gain.Value); // audio focus: ducked, silenced or back
                 track.Write(pcm, 0, length, WriteMode.Blocking); // paces the loop to the playback clock
                 written += (uint)(length / AuraProtocol.Channels);
 
-                if (written / AuraProtocol.FrameSamples % 2 == 0) // the visualizer only needs 25 updates a second
+                // The visualizer only needs 25 updates a second, and none while nothing shows it.
+                if (!SpectrumHub.IsObserved)
+                    pendingLevels.Clear();
+                else if (written / AuraProtocol.FrameSamples % 2 == 0)
                 {
                     var levels = new float[SpectrumHub.Bands];
                     analyzer.Analyze(pcm.AsSpan(0, length), levels);
+                    if (pendingLevels.Count == MaxPendingLevels)
+                        pendingLevels.Dequeue();
                     pendingLevels.Enqueue((written, levels));
                 }
                 uint played = (uint)track.PlaybackHeadPosition;
@@ -298,8 +343,33 @@ public sealed class ListenService : Service
     public override void OnDestroy()
     {
         cts?.Cancel();
+        if (focusRequest is not null)
+            ((AudioManager)GetSystemService(AudioService)!).AbandonAudioFocusRequest(focusRequest);
+        if (noisyReceiver is not null)
+            UnregisterReceiver(noisyReceiver);
         if (AuraHub.Current is not Failed) // keep the error on screen
             AuraHub.Publish(new Idle());
         base.OnDestroy();
+    }
+
+    /// <summary>Output volume the audio focus asks for, read by the playback thread.</summary>
+    sealed class OutputGain
+    {
+        public volatile float Value = 1;
+    }
+
+    sealed class FocusListener(OutputGain gain) : Java.Lang.Object, AudioManager.IOnAudioFocusChangeListener
+    {
+        public void OnAudioFocusChange(AudioFocus focusChange) => gain.Value = focusChange switch
+        {
+            AudioFocus.Gain => 1f,
+            AudioFocus.LossTransientCanDuck => 0.2f, // a navigation prompt or a notification: duck
+            _ => 0f,                                  // a call or another player: stay silent until it ends
+        };
+    }
+
+    sealed class NoisyReceiver(Action onNoisy) : BroadcastReceiver
+    {
+        public override void OnReceive(Context? context, Intent? intent) => onNoisy();
     }
 }
