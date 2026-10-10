@@ -8,6 +8,8 @@
         public MainPage()
         {
             InitializeComponent();
+            // Inside the pull-to-update ScrollView the layout would collapse: give it the visible height.
+            HomeScroll.SizeChanged += (_, _) => HomeLayout.HeightRequest = HomeScroll.Height;
             LanguageButton.Text = $"🌐 {AppLanguages.Next(LanguageSettings.Current).ToUpperInvariant()}";
             Render(AuraHub.Current);
         }
@@ -103,7 +105,7 @@
                     var message = check is CheckFailed(var reason)
                         ? Format(AppStrings.UpdateCheckFailed, reason)
                         : Format(AppStrings.UpdateUpToDate, AppInfo.Current.VersionString);
-                    await MatrixDialog.ShowAsync(this, AppStrings.UpdateTitle, message, "OK");
+                    await MatrixDialog.ShowAsync(this, AppStrings.UpdateCheckTitle, message, "OK");
                 }
                 return; // at launch, stay silent: up to date, or offline and we will look again next time
             }

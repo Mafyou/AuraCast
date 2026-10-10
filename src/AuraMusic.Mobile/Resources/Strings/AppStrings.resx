@@ -56,4 +56,5 @@
   <data name="UpdateOpenSettings" xml:space="preserve"><value>Ouvrir les réglages</value></data>
   <data name="UpdateUpToDate" xml:space="preserve"><value>Tu as déjà la dernière version ({0}).</value></data>
   <data name="UpdateCheckFailed" xml:space="preserve"><value>Impossible de vérifier les mises à jour : {0}</value></data>
+  <data name="UpdateCheckTitle" xml:space="preserve"><value>Mises à jour</value></data>
 </root>

@@ -14,61 +14,64 @@
         <RefreshView x:Name="UpdateRefresh"
                      RefreshColor="{StaticResource MatrixGreen}"
                      Refreshing="OnPullToUpdate">
-            <Grid RowDefinitions="*,Auto,Auto" Padding="20,40,20,28" RowSpacing="12">
+            <!-- RefreshView only reacts on Android when its content can scroll; the layout is sized to the page. -->
+            <ScrollView x:Name="HomeScroll" VerticalScrollBarVisibility="Never" SafeAreaEdges="Container">
+                <Grid x:Name="HomeLayout" RowDefinitions="*,Auto,Auto" Padding="20,40,20,28" RowSpacing="12">
 
-                <Button x:Name="LanguageButton"
-                        Style="{StaticResource MatrixButton}"
-                        HorizontalOptions="Start"
-                        VerticalOptions="Start"
-                        HeightRequest="46"
-                        Padding="14,0"
-                        SemanticProperties.Description="{x:Static strings:AppStrings.SwitchLanguageDescription}"
-                        Clicked="OnLanguageClicked" />
-
-                <Button Text="?"
-                        Style="{StaticResource MatrixButton}"
-                        HorizontalOptions="End"
-                        VerticalOptions="Start"
-                        WidthRequest="46"
-                        HeightRequest="46"
-                        Padding="0"
-                        SemanticProperties.Description="{x:Static strings:AppStrings.HelpDescription}"
-                        Clicked="OnHelpClicked" />
-
-                <VerticalStackLayout VerticalOptions="Center" Spacing="18">
-                    <Image Source="splash_screen.png"
-                           HeightRequest="300"
-                           Aspect="AspectFit"
-                           HorizontalOptions="Center"
-                           SemanticProperties.Description="AuraMusic"
-                           SemanticProperties.HeadingLevel="Level1" />
-
-                    <Border Style="{StaticResource MatrixPanelBorder}">
-                        <VerticalStackLayout Spacing="8">
-                            <Label x:Name="StatusLabel" Style="{StaticResource MatrixStatus}" />
-                            <Label x:Name="HintLabel" Style="{StaticResource MatrixBody}" />
-                        </VerticalStackLayout>
-                    </Border>
-                </VerticalStackLayout>
-
-                <VerticalStackLayout x:Name="ModeButtons" Grid.Row="1" Spacing="12">
-                    <Button Text="{x:Static strings:AppStrings.BroadcastButton}"
-                            Style="{StaticResource MatrixPrimaryButton}"
-                            Clicked="OnBroadcastClicked" />
-
-                    <Button Text="{x:Static strings:AppStrings.ListenButton}"
+                    <Button x:Name="LanguageButton"
                             Style="{StaticResource MatrixButton}"
-                            Clicked="OnListenClicked" />
-                </VerticalStackLayout>
+                            HorizontalOptions="Start"
+                            VerticalOptions="Start"
+                            HeightRequest="46"
+                            Padding="14,0"
+                            SemanticProperties.Description="{x:Static strings:AppStrings.SwitchLanguageDescription}"
+                            Clicked="OnLanguageClicked" />
 
-                <VerticalStackLayout x:Name="ActivePanel" Grid.Row="2" Spacing="12">
-                    <controls:SpectrumView x:Name="Spectrum" HeightRequest="120" />
-
-                    <Button Text="{x:Static strings:AppStrings.StopButton}"
+                    <Button Text="?"
                             Style="{StaticResource MatrixButton}"
-                            Clicked="OnStopClicked" />
-                </VerticalStackLayout>
-            </Grid>
+                            HorizontalOptions="End"
+                            VerticalOptions="Start"
+                            WidthRequest="46"
+                            HeightRequest="46"
+                            Padding="0"
+                            SemanticProperties.Description="{x:Static strings:AppStrings.HelpDescription}"
+                            Clicked="OnHelpClicked" />
+
+                    <VerticalStackLayout VerticalOptions="Center" Spacing="18">
+                        <Image Source="splash_screen.png"
+                               HeightRequest="300"
+                               Aspect="AspectFit"
+                               HorizontalOptions="Center"
+                               SemanticProperties.Description="AuraMusic"
+                               SemanticProperties.HeadingLevel="Level1" />
+
+                        <Border Style="{StaticResource MatrixPanelBorder}">
+                            <VerticalStackLayout Spacing="8">
+                                <Label x:Name="StatusLabel" Style="{StaticResource MatrixStatus}" />
+                                <Label x:Name="HintLabel" Style="{StaticResource MatrixBody}" />
+                            </VerticalStackLayout>
+                        </Border>
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout x:Name="ModeButtons" Grid.Row="1" Spacing="12">
+                        <Button Text="{x:Static strings:AppStrings.BroadcastButton}"
+                                Style="{StaticResource MatrixPrimaryButton}"
+                                Clicked="OnBroadcastClicked" />
+
+                        <Button Text="{x:Static strings:AppStrings.ListenButton}"
+                                Style="{StaticResource MatrixButton}"
+                                Clicked="OnListenClicked" />
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout x:Name="ActivePanel" Grid.Row="2" Spacing="12">
+                        <controls:SpectrumView x:Name="Spectrum" HeightRequest="120" />
+
+                        <Button Text="{x:Static strings:AppStrings.StopButton}"
+                                Style="{StaticResource MatrixButton}"
+                                Clicked="OnStopClicked" />
+                    </VerticalStackLayout>
+                </Grid>
+            </ScrollView>
         </RefreshView>
 
         <!-- Shown for 2 s at launch: Android 12+ only allows a tiny icon on the system splash. -->
