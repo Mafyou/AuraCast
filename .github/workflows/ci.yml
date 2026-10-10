@@ -1,4 +1,4 @@
-name: CI
+name: Release AuraMusic APK
 
 # Every push to main and every pull request: the Kernel tests, and the Android app must still build.
 # Warnings fail the build, so "0 warning" is checked here rather than by eye.
