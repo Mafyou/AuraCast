@@ -63,7 +63,7 @@
 		<PackageReference Include="CommunityToolkit.Maui" Version="15.0.1" />
 		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="11.0.0-rc.1.26425.128" />
-		<PackageReference Include="Concentus" Version="2.2.2" />
+		<PackageReference Include="OpusSharp.Natives" Version="1.6.1.4" />
 	</ItemGroup>
 
 	<ItemGroup>

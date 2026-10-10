@@ -2,14 +2,17 @@
 
   <PropertyGroup>
     <TargetFramework>net11.0</TargetFramework>
+    <!-- LibraryImport generates unsafe marshalling code for the libopus bridge. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
 
   <ItemGroup>
-    <EmbeddedResource Update="Resources\KernelStrings.resx"
-                      StronglyTypedLanguage="CSharp"
-                      StronglyTypedNamespace="AuraMusic.Kernel.Resources"
-                      StronglyTypedClassName="KernelStrings"
-                      StronglyTypedFileName="$(IntermediateOutputPath)KernelStrings.Designer.cs" />
+    <EmbeddedResource Update="Resources\KernelStrings.resx" StronglyTypedLanguage="CSharp" StronglyTypedNamespace="AuraMusic.Kernel.Resources" StronglyTypedClassName="KernelStrings" StronglyTypedFileName="$(IntermediateOutputPath)KernelStrings.Designer.cs" />
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <PackageReference Include="Concentus" Version="2.2.2" />
   </ItemGroup>
 </Project>

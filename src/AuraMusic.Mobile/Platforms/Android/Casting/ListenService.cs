@@ -377,7 +377,8 @@ public sealed class ListenService : Service
             .SetBufferSizeInBytes(Math.Max(minBuffer * 4, hundredMs))!
             .Build();
 
-        var decoder = OpusCodecFactory.CreateDecoder(AuraProtocol.SampleRate, AuraProtocol.Channels);
+        using var decoder = OpusCodec.CreateDecoder(AuraProtocol.SampleRate, AuraProtocol.Channels);
+        Log.Info(AuraLog.Tag, decoder.IsNative ? "decoder: libopus" : "decoder: managed fallback (libopus did not load)");
         var pcm = new float[AuraProtocol.FrameSamples * AuraProtocol.Channels];
 
         var playout = new PlayoutController(stats);

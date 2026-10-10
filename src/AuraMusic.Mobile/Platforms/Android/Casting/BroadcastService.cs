@@ -17,9 +17,6 @@ public sealed class BroadcastService : Service
     AudioRecord? recorder;
     Thread? captureThread;
 
-    // About a third of the CPU of complexity 10, so no phone falls behind; the difference is not audible.
-    const int EncoderComplexity = 5;
-
     const int FrameLength = AuraProtocol.FrameSamples * AuraProtocol.Channels;
 
     // Captured frames are rented, not allocated: 50 fresh arrays a second kept the GC busy, and on Android
@@ -263,11 +260,8 @@ public sealed class BroadcastService : Service
     /// </summary>
     async Task EncodeLoop(CancellationToken stoppingToken)
     {
-        var encoder = OpusCodecFactory.CreateEncoder(AuraProtocol.SampleRate, AuraProtocol.Channels, OpusApplication.OPUS_APPLICATION_AUDIO);
-        encoder.Bitrate = AuraProtocol.Bitrate;
-        encoder.Complexity = EncoderComplexity;
-        encoder.SignalType = OpusSignal.OPUS_SIGNAL_MUSIC;
-        encoder.MaxBandwidth = OpusBandwidth.OPUS_BANDWIDTH_FULLBAND; // never trade away the highs
+        using var encoder = OpusCodec.CreateEncoder(AuraProtocol.SampleRate, AuraProtocol.Channels, AuraProtocol.Bitrate);
+        Log.Info(AuraLog.Tag, encoder.IsNative ? "encoder: libopus" : "encoder: managed fallback (libopus did not load)");
 
         var packet = new byte[AuraProtocol.MaxPacketSize];
         uint sequence = 0;
@@ -294,7 +288,7 @@ public sealed class BroadcastService : Service
                 encoder.Bitrate = bitrate = wanted;
 
             long started = Stopwatch.GetTimestamp();
-            int length = encoder.Encode(pcm.AsSpan(0, FrameLength), AuraProtocol.FrameSamples, packet, packet.Length);
+            int length = encoder.Encode(pcm.AsSpan(0, FrameLength), AuraProtocol.FrameSamples, packet);
             encoding += Stopwatch.GetElapsedTime(started);
             FramePool.Return(pcm);
 

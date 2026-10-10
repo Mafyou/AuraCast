@@ -40,13 +40,15 @@ L'écran peut être éteint des deux côtés. La notification permet d'arrêter.
 
 ## Développement
 
-- .NET 11 / C# 15 (unions, `field`, collections frozen), MAUI Android uniquement (API 29+), codec Opus [Concentus](https://github.com/lostromb/concentus).
+- .NET 11 / C# 15 (unions, `field`, collections frozen), MAUI Android uniquement (API 29+).
+- Codec Opus : **libopus natif** (binaires du paquet OpusSharp.Natives, appelés par un pont maison dans `Kernel/Codec/`), avec [Concentus](https://github.com/lostromb/concentus) (C# pur) en secours si la bibliothèque ne se charge pas. Les deux produisent le même flux.
 - `src/AuraMusic.Kernel` : la logique sans dépendance Android, testable.
   - `State/` : l'état de l'app, une union `AuraState` publiée par `AuraHub` ;
   - `Protocol/` : le format des données échangées ;
   - `Playout/` : `PlayoutController`, qui décide toutes les 20 ms de jouer, rattraper, combler, sauter ou rebufferiser (une union `PlayoutStep`), et `PcmCrossfade` ;
   - `Spectrum/` : l'analyseur de spectre ;
   - `Updates/` : lecture de la dernière release GitHub et comparaison des versions (une union `UpdateCheck`) ;
+  - `Codec/` : encodeur et décodeur Opus (`OpusCodec`, natif ou C#) ;
   - `Localization/` : choix de la langue (FR par défaut, EN) ;
   - `Multipath/` : fusion des liens Bluetooth et Wi-Fi (`SequenceGate`), répartition côté master (`LinkRouter`), balise réseau (`LanBeacon`) et téléphones de confiance (`TrustedDevices`).
 - `src/AuraMusic.Mobile` : l'app. Code Android dans `Platforms/Android/Casting/` (`BroadcastService` côté master, `ListenService` côté écoute).
