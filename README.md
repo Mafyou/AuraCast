@@ -89,7 +89,7 @@ adb logcat -s AuraMusic
 
 ### Release
 
-Pousser un tag `v*` sur `main` déclenche [le workflow de release](.github/workflows/release.yml) : vérification que le tag est sur `main`, tests, APK Release signé, release GitHub avec l'APK attaché et son empreinte SHA-256.
+Pousser un tag `v*` sur `main` déclenche le job de release du même workflow : vérification que le tag est sur `main`, tests, APK Release signé, release GitHub avec l'APK attaché et son empreinte SHA-256.
 
 ```sh
 git tag v1.0.0 && git push origin v1.0.0
