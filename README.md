@@ -91,12 +91,14 @@ adb logcat -s AuraMusic
 
 ### Release
 
-Une version ne se publie qu'à la main, depuis [le workflow de release](.github/workflows/ci.yml), sur `main` : **Actions › Release AuraMusic APK › Run workflow**, en donnant le numéro de version, ou :
+Le numéro de version vit dans `src/AuraMusic.Mobile/AuraMusic.Mobile.csproj` (`ApplicationDisplayVersion`). Pour publier :
+
+1. monter ce numéro dans une pull request, et la fusionner ;
+2. lancer à la main [le workflow de release](.github/workflows/ci.yml) sur `main` : **Actions › Release AuraMusic APK › Run workflow**, ou :
 
 ```sh
-gh workflow run ci.yml --ref main -f version=1.7.0
+gh workflow run ci.yml --ref main
 ```
 
-Le workflow lance les tests du Kernel, compile l'APK Release signé (**warnings traités comme des erreurs**), crée le tag `v1.7.0` sur le commit compilé et la release GitHub avec l'APK attaché et son empreinte SHA-256. Il refuse une autre branche que `main` et un numéro déjà publié. Le SDK .NET est épinglé dans `global.json`.
-
+Le workflow lit la version dans le csproj, lance les tests du Kernel, compile l'APK Release signé (**warnings traités comme des erreurs**), crée le tag `v` + version sur le commit compilé et la release GitHub avec l'APK attaché et son empreinte SHA-256. Il refuse une autre branche que `main` et une version déjà publiée (il faut alors monter le numéro). Le SDK .NET est épinglé dans `global.json`.
 Le workflow a besoin de deux secrets du dépôt : `ANDROID_KEYSTORE_BASE64` (le keystore, alias `mafyou`, encodé en base64) et `ANDROID_KEYSTORE_PASSWORD`. Toutes les versions doivent être signées avec la même clé, sinon Android refuse d'installer la mise à jour.

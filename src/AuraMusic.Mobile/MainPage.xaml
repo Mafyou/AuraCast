@@ -87,6 +87,12 @@
                    Aspect="AspectFit"
                    Margin="20"
                    SemanticProperties.Description="{x:Static strings:AppStrings.LogoDescription}" />
+            <!-- Which version is running, readable at a glance while the artwork shows. -->
+            <Label x:Name="VersionLabel"
+                   Style="{StaticResource MatrixCaption}"
+                   HorizontalOptions="Center"
+                   VerticalOptions="End"
+                   Margin="0,0,0,28" />
         </Grid>
     </Grid>
 

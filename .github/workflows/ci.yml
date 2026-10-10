@@ -1,15 +1,11 @@
 name: Release AuraMusic APK
 
-# Started by hand only (Actions › Release AuraMusic APK › Run workflow, on main, with a version number):
-# the Kernel tests, then the signed APK attached to a new GitHub release, which the app offers to every
-# phone at its next launch. Warnings fail the build, so "0 warning" is checked here rather than by eye.
+# Started by hand only (Actions › Release AuraMusic APK › Run workflow, on main): the Kernel tests, then
+# the signed APK attached to a new GitHub release, which the app offers to every phone at its next launch.
+# The version is the one written in AuraMusic.Mobile.csproj: raise it there, in a pull request, first.
+# Warnings fail the build, so "0 warning" is checked here rather than by eye.
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version à publier, sans le v (ex. 1.7.0)'
-        required: true
-        type: string
 
 # Two releases must never race for the same phones.
 concurrency:
@@ -51,26 +47,27 @@ jobs:
     permissions:
       contents: write
     env:
-      VERSION: ${{ inputs.version }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
 
-      # Before the long build: a release only comes from main, under a new x.y.z number.
-      - name: Check the branch and the version
+      # Before the long build: a release only comes from main, under the csproj's version, which must be new.
+      - name: Check the branch and read the version
         run: |
           if [ "$GITHUB_REF" != "refs/heads/main" ]; then
             echo "::error::Releases are only cut from main, not from $GITHUB_REF_NAME."
             exit 1
           fi
+          VERSION=$(sed -n 's:.*<ApplicationDisplayVersion>\(.*\)</ApplicationDisplayVersion>.*:\1:p' src/AuraMusic.Mobile/AuraMusic.Mobile.csproj)
           if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::'$VERSION' is not a version like 1.7.0."
+            echo "::error::ApplicationDisplayVersion '$VERSION' is not a version like 1.7.0."
             exit 1
           fi
           if gh release view "v$VERSION" > /dev/null 2>&1 || [ -n "$(git ls-remote --tags origin "refs/tags/v$VERSION")" ]; then
-            echo "::error::v$VERSION already exists."
+            echo "::error::v$VERSION is already published: raise ApplicationDisplayVersion in AuraMusic.Mobile.csproj."
             exit 1
           fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@v4
         with:
@@ -115,7 +112,6 @@ jobs:
           dotnet publish src/AuraMusic.Mobile -f net11.0-android -c Release -o publish
           -p:TreatWarningsAsErrors=true
           -p:AndroidPackageFormat=apk
-          -p:ApplicationDisplayVersion="$VERSION"
           -p:ApplicationVersion=$((GITHUB_RUN_NUMBER + 100))
           -p:AndroidKeyStore=true
           -p:AndroidSigningKeyStore="$RUNNER_TEMP/auramusic.keystore"
