@@ -1,0 +1,36 @@
+AuraMusic transforme votre téléphone en petite station de diffusion : le son qu'il joue est envoyé en direct aux téléphones de vos proches, juste à côté de vous. Un seul lance la musique, tout le monde l'entend dans son casque.
+
+🎧 À QUOI ÇA SERT
+• Écouter le même morceau à deux, chacun avec ses écouteurs
+• Partager une playlist en voiture, en train, en soirée
+• Regarder une vidéo à plusieurs sans haut-parleur
+
+⚡ COMMENT ÇA MARCHE
+1. Associez les téléphones en Bluetooth, une seule fois.
+2. Celui qui a la musique appuie sur « Diffuser mon son ».
+3. Les autres appuient sur « Écouter ». C'est tout.
+
+📡 BLUETOOTH ET WI-FI À LA FOIS
+Le son passe par le Bluetooth et, quand les téléphones sont sur le même réseau, par le Wi-Fi en même temps : la qualité monte, et si l'un décroche, l'autre prend le relais. Pas de Wi-Fi sous la main ? Le partage de connexion de l'un des téléphones suffit. Aucune connexion internet n'est nécessaire.
+
+🎚️ CE QUE VOUS AVEZ EN MAIN
+• Un curseur de synchro : au plus près du son d'origine, ou plus stable
+• Un délai qui s'adapte tout seul quand la liaison radio est difficile
+• Plusieurs téléphones à l'écoute en même temps
+• Diffusion et écoute écran éteint
+• Un visualiseur de spectre en direct
+• Une interface en français et en anglais
+
+🔒 VIE PRIVÉE
+• Aucun compte, aucune publicité, aucun traceur
+• Le son va directement d'un téléphone à l'autre, sans passer par un serveur
+• Le microphone n'est jamais utilisé et rien n'est enregistré
+• Seuls les téléphones que vous avez associés peuvent écouter
+• Logiciel libre : le code source est public sur https://github.com/Mafyou/AuraMusic
+
+ℹ️ BON À SAVOIR
+• Android demande d'autoriser un « enregistrement de l'écran » : c'est sa façon de laisser une application capter le son du téléphone. AuraMusic ne capte que le son, jamais l'image.
+• Certaines applications interdisent que leur son soit capté : avec elles, les autres téléphones n'entendent rien. AuraMusic ne peut pas contourner ce choix.
+• Le son arrive avec un léger décalage, de 0,2 à 1 seconde selon la liaison : dans la même pièce, utilisez des casques.
+• Fonctionne entre téléphones Android (Android 10 ou plus récent).
+• Ne partagez que des contenus que vous avez le droit de partager, dans un cadre privé.

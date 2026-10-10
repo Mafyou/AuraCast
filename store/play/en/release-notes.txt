@@ -1,0 +1,4 @@
+First version on the Play Store.
+• Share your phone's sound with the phones around you, over Bluetooth and Wi-Fi
+• The delay adapts by itself when the Bluetooth link is rough
+• Sync slider, spectrum visualizer, interface in English and French

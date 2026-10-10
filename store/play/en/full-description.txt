@@ -1,0 +1,36 @@
+AuraMusic turns your phone into a small broadcasting station: the sound it plays is sent live to the phones of the people right next to you. One of you starts the music, everyone hears it in their own headphones.
+
+🎧 WHAT IT IS FOR
+• Listening to the same track together, each with your own earbuds
+• Sharing a playlist in the car, on the train, at a party
+• Watching a video together without a speaker
+
+⚡ HOW IT WORKS
+1. Pair the phones over Bluetooth, once.
+2. Whoever has the music taps “Share my sound”.
+3. The others tap “Listen”. That is all.
+
+📡 BLUETOOTH AND WI-FI AT ONCE
+The sound travels over Bluetooth and, when the phones are on the same network, over Wi-Fi at the same time: the quality goes up, and if one drops, the other takes over. No Wi-Fi around? The hotspot of one of the phones is enough. No internet connection is needed.
+
+🎚️ WHAT YOU GET
+• A sync slider: closer to the original sound, or steadier
+• A delay that adapts by itself when the radio link is rough
+• Several phones listening at once
+• Sharing and listening with the screen off
+• A live spectrum visualizer
+• An interface in English and French
+
+🔒 PRIVACY
+• No account, no ads, no trackers
+• The sound goes straight from one phone to the other, never through a server
+• The microphone is never used and nothing is recorded
+• Only the phones you have paired can listen
+• Open source: the code is public at https://github.com/Mafyou/AuraMusic
+
+ℹ️ GOOD TO KNOW
+• Android asks you to allow “screen recording”: that is how it lets an app capture the phone's sound. AuraMusic captures the sound only, never the picture.
+• Some apps forbid capturing their sound: with those, the other phones hear nothing. AuraMusic cannot work around that choice.
+• The sound arrives slightly delayed, 0.2 to 1 second depending on the link: in the same room, use headphones.
+• Works between Android phones (Android 10 or later).
+• Only share content you have the right to share, in a private setting.

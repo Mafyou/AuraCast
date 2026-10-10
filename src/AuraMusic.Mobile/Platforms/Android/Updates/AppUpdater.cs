@@ -1,8 +1,21 @@
+#if !PLAY_STORE
+// Here rather than in the manifest: the Play Store refuses an app that asks to install packages.
+[assembly: UsesPermission(Android.Manifest.Permission.RequestInstallPackages)]
+#endif
+
 namespace AuraMusic.Mobile.Updates;
 
 /// <summary>Checks GitHub for a newer AuraMusic and installs it over the current one.</summary>
 public static class AppUpdater
 {
+    /// <summary>False on a Play Store build: the store updates the app, which may not update itself.</summary>
+    public static bool SelfUpdates =>
+#if PLAY_STORE
+        false;
+#else
+        true;
+#endif
+
     const string ApkMimeType = "application/vnd.android.package-archive";
 
     // No global timeout: the 40 MB APK can take longer than HttpClient's default 100 s on a slow network.
@@ -16,8 +29,9 @@ public static class AppUpdater
 
     public static Task<UpdateCheck> CheckAsync(CancellationToken stoppingToken)
     {
-#if DEBUG
+#if DEBUG || PLAY_STORE
         // Local builds are signed with the debug key: a release could not be installed over them anyway.
+        // Play Store builds are updated by the store.
         return Task.FromResult<UpdateCheck>(new UpToDate());
 #else
         return CheckWithTimeoutAsync(stoppingToken);

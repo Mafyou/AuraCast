@@ -12,6 +12,7 @@
             HomeScroll.SizeChanged += (_, _) => HomeLayout.HeightRequest = HomeScroll.Height;
             LanguageButton.Text = $"🌐 {AppLanguages.Next(LanguageSettings.Current).ToUpperInvariant()}";
             VersionLabel.Text = $"v{AppInfo.Current.VersionString}";
+            UpdateRefresh.IsEnabled = AppUpdater.SelfUpdates; // nothing to pull for where the store updates the app
 #if DEBUG
             // A test build shows the version being worked on, not a published one, and never updates itself.
             VersionLabel.Text += " · dev";

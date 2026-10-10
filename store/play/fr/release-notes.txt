@@ -1,0 +1,4 @@
+Première version sur le Play Store.
+• Partagez le son de votre téléphone avec ceux d'à côté, en Bluetooth et en Wi-Fi
+• Le délai s'adapte tout seul quand la liaison Bluetooth est difficile
+• Curseur de synchro, visualiseur de spectre, interface en français et en anglais

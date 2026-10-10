@@ -97,3 +97,9 @@ jobs:
       # Release configuration: it is the one that ships, and the one where the update check is compiled in.
       - name: Build the app
         run: dotnet build src/AuraMusic.Mobile -f net11.0-android -c Release -p:TreatWarningsAsErrors=true
+
+      # The Play Store variant compiles other code paths (no self-update): it must not break unnoticed.
+      - name: Build the Play Store variant
+        run: |
+          rm -rf src/AuraMusic.Mobile/obj src/AuraMusic.Mobile/bin
+          dotnet build src/AuraMusic.Mobile -f net11.0-android -c Release -p:Distribution=Play -p:TreatWarningsAsErrors=true
