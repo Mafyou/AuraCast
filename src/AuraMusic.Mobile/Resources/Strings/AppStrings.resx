@@ -17,7 +17,7 @@
   <data name="StatusStreamingMany" xml:space="preserve"><value>&gt; {0} oreilles connectées</value></data>
   <data name="HintStreaming" xml:space="preserve"><value>Lance ta musique, dans n'importe quelle app : elle est partagée en direct.</value></data>
   <data name="StatusSearching" xml:space="preserve"><value>&gt; recherche du signal_</value></data>
-  <data name="HintSearching" xml:space="preserve"><value>Les téléphones doivent être appairés en Bluetooth et à quelques mètres les uns des autres.</value></data>
+  <data name="HintSearching" xml:space="preserve"><value>Même Wi-Fi, ou téléphones appairés en Bluetooth à quelques mètres.</value></data>
   <data name="StatusListening" xml:space="preserve"><value>&gt; connecté à {0}</value></data>
   <data name="HintListening" xml:space="preserve"><value>Tu entends sa musique en direct. Tu peux éteindre l'écran.</value></data>
   <data name="StatusFailed" xml:space="preserve"><value>&gt; erreur</value></data>
@@ -27,7 +27,7 @@
   <data name="TutorialWelcomeTitle" xml:space="preserve"><value>Nouveau pouvoir débloqué</value></data>
   <data name="TutorialWelcomeText" xml:space="preserve"><value>Ton téléphone sait maintenant faire ce qu'il ne savait pas faire : diffuser sa musique vers les téléphones autour de toi. Sans Wi-Fi, sans internet.</value></data>
   <data name="TutorialPairTitle" xml:space="preserve"><value>Relie les téléphones</value></data>
-  <data name="TutorialPairText" xml:space="preserve"><value>Une seule fois : sur un téléphone, ouvre Réglages › Bluetooth › Associer un nouvel appareil, choisis l'autre téléphone et valide le code des deux côtés.</value></data>
+  <data name="TutorialPairText" xml:space="preserve"><value>Sur le même Wi-Fi, rien à faire. Pour marcher partout, appairez aussi les téléphones une fois en Bluetooth : Réglages › Bluetooth › Associer un nouvel appareil. Avec les deux, le son passe par le plus rapide.</value></data>
   <data name="TutorialBroadcastTitle" xml:space="preserve"><value>Diffuse</value></data>
   <data name="TutorialBroadcastText" xml:space="preserve"><value>Celui qui a la musique appuie sur « Diffuser mon son » et accepte les autorisations. Android parle d'« enregistrement de l'écran » : c'est sa façon de laisser AuraMusic capter le son, rien n'est enregistré. Lance ensuite ta musique, dans n'importe quelle app.</value></data>
   <data name="TutorialListenTitle" xml:space="preserve"><value>Capte</value></data>
@@ -58,4 +58,5 @@
   <data name="UpdateCheckFailed" xml:space="preserve"><value>Impossible de vérifier les mises à jour : {0}</value></data>
   <data name="UpdateCheckTitle" xml:space="preserve"><value>Mises à jour</value></data>
   <data name="HintStreamingWith" xml:space="preserve"><value>À l'écoute : {0}. Lance ta musique, dans n'importe quelle app : elle est partagée en direct.</value></data>
+  <data name="HintListeningVia" xml:space="preserve"><value>Via {0}. Tu entends sa musique en direct, même écran éteint.</value></data>
 </root>

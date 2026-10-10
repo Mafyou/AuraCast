@@ -1,6 +1,6 @@
 namespace AuraMusic.Mobile.Casting;
 
-/// <summary>Runtime permissions for Bluetooth streaming; the master additionally needs the microphone permission for playback capture.</summary>
+/// <summary>Runtime permissions for Bluetooth and Wi-Fi streaming; the master additionally needs the microphone permission for playback capture.</summary>
 sealed class AuraPermissions(bool capture) : Permissions.BasePlatformPermission
 {
     public override (string androidPermission, bool isRuntime)[] RequiredPermissions
@@ -20,4 +20,14 @@ sealed class AuraPermissions(bool capture) : Permissions.BasePlatformPermission
             return [.. permissions];
         }
     }
+}
+
+/// <summary>
+/// Newer Android versions gate the local network behind "nearby Wi-Fi devices". Asked on its own and optional:
+/// refused, only the Wi-Fi link is lost, Bluetooth still works.
+/// </summary>
+sealed class WifiPermission : Permissions.BasePlatformPermission
+{
+    public override (string androidPermission, bool isRuntime)[] RequiredPermissions =>
+        OperatingSystem.IsAndroidVersionAtLeast(33) ? [(Manifest.Permission.NearbyWifiDevices, true)] : [];
 }

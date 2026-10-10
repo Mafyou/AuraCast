@@ -40,5 +40,7 @@ public static class AuraController
             throw new InvalidOperationException(capture
                 ? AppStrings.ErrorPermissionsBroadcast
                 : AppStrings.ErrorPermissionsListen);
+
+        await new WifiPermission().RequestAsync(); // optional: refused, Bluetooth alone carries the stream
     }
 }

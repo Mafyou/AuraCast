@@ -2,7 +2,8 @@ namespace AuraMusic.Mobile.Casting;
 
 /// <summary>
 /// Master side: captures what the phone plays (YouTube Music, Spotify…), encodes it to Opus
-/// and pushes it to every listener connected over a Bluetooth Classic RFCOMM socket.
+/// and pushes it to every listener, over Bluetooth Classic RFCOMM and, when on the same Wi-Fi, over TCP too:
+/// listeners connected both ways keep the first copy of each numbered packet.
 /// </summary>
 [Service(Exported = false, ForegroundServiceType = ForegroundService.TypeMediaProjection)]
 public sealed class BroadcastService : Service
@@ -30,6 +31,10 @@ public sealed class BroadcastService : Service
         new BoundedChannelOptions(25) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true, SingleWriter = true },
         dropped => FramePool.Return(dropped));
     BluetoothServerSocket? server;
+    LanServer? lan;
+
+    // Identifies this broadcast: a listener following it over two links only merges packets of the same session.
+    readonly uint session = (uint)Random.Shared.NextInt64(uint.MaxValue + 1L);
 
     public override IBinder? OnBind(Intent? intent) => null;
 
@@ -79,6 +84,7 @@ public sealed class BroadcastService : Service
         cts = new CancellationTokenSource();
         var stoppingToken = cts.Token;
         _ = Task.Run(() => AcceptLoop(stoppingToken));
+        StartLan(stoppingToken);
         captureThread = new Thread(() => CaptureLoop(stoppingToken)) { IsBackground = true, Name = "AuraMusic capture" };
         captureThread.Start();
         _ = Task.Run(() => EncodeLoop(stoppingToken));
@@ -109,6 +115,36 @@ public sealed class BroadcastService : Service
             .Build()!;
     }
 
+    /// <summary>Wi-Fi is a bonus: if the server cannot start, Bluetooth alone carries the stream as before.</summary>
+    void StartLan(CancellationToken stoppingToken)
+    {
+        try
+        {
+            lan = new LanServer(session, DeviceName.Of(this));
+            lan.Start((stream, name, close) => AddListener(new ListenerLink(stream, name, close), stoppingToken), stoppingToken);
+        }
+        catch (SocketException ex)
+        {
+            Log.Warn(AuraLog.Tag, $"Wi-Fi link unavailable: {ex.Message}");
+        }
+    }
+
+    void AddListener(ListenerLink link, CancellationToken stoppingToken)
+    {
+        lock (listeners)
+            listeners.Add(link);
+        PublishListeners();
+
+        _ = Task.Run(() => link.Run(session, stoppingToken)).ContinueWith(_ =>
+        {
+            lock (listeners)
+                listeners.Remove(link);
+            link.Dispose();
+            if (!stoppingToken.IsCancellationRequested)
+                PublishListeners();
+        }, TaskScheduler.Default);
+    }
+
     void AcceptLoop(CancellationToken stoppingToken)
     {
         while (!stoppingToken.IsCancellationRequested)
@@ -134,19 +170,7 @@ public sealed class BroadcastService : Service
                 return;
             }
 
-            var link = new ListenerLink(socket, socket.RemoteDevice?.Name ?? "?");
-            lock (listeners)
-                listeners.Add(link);
-            PublishListeners();
-
-            _ = Task.Run(() => link.Run(stoppingToken)).ContinueWith(_ =>
-            {
-                lock (listeners)
-                    listeners.Remove(link);
-                link.Dispose();
-                if (!stoppingToken.IsCancellationRequested)
-                    PublishListeners();
-            }, TaskScheduler.Default);
+            AddListener(new ListenerLink(socket.OutputStream!, socket.RemoteDevice?.Name ?? "?", socket.Close), stoppingToken);
         }
     }
 
@@ -154,7 +178,7 @@ public sealed class BroadcastService : Service
     {
         ImmutableArray<string> names;
         lock (listeners)
-            names = [.. listeners.Select(link => link.Name)];
+            names = [.. listeners.Select(link => link.Name).Distinct()]; // one phone may be on both links
         AuraHub.Publish(names.IsEmpty ? new Advertising() : new Streaming(names));
     }
 
@@ -213,6 +237,7 @@ public sealed class BroadcastService : Service
         encoder.MaxBandwidth = OpusBandwidth.OPUS_BANDWIDTH_FULLBAND; // never trade away the highs
 
         var packet = new byte[AuraProtocol.MaxPacketSize];
+        uint sequence = 0;
         long windowStart = Environment.TickCount64;
         var encoding = TimeSpan.Zero;
         int frames = 0;
@@ -223,7 +248,7 @@ public sealed class BroadcastService : Service
             encoding += Stopwatch.GetElapsedTime(started);
             FramePool.Return(pcm);
 
-            var frame = packet.AsSpan(0, length).ToArray();
+            var frame = new EncodedFrame(sequence++, packet.AsSpan(0, length).ToArray());
             ListenerLink[] targets;
             lock (listeners)
                 targets = [.. listeners];
@@ -246,6 +271,7 @@ public sealed class BroadcastService : Service
         cts?.Cancel();
 
         server?.Close();
+        lan?.Dispose();
 
         lock (listeners)
         {
@@ -262,72 +288,6 @@ public sealed class BroadcastService : Service
         if (AuraHub.Current is not Failed) // keep the error on screen
             AuraHub.Publish(new Idle());
         base.OnDestroy();
-    }
-
-    /// <summary>One connected listener, with its own small queue so a slow Bluetooth link never stalls the capture.</summary>
-    sealed class ListenerLink(BluetoothSocket socket, string name) : IDisposable
-    {
-        /// <summary>The listener's phone, as shown on the master's screen.</summary>
-        public string Name => name;
-
-        const int QueueCapacity = 25;
-        const int MaxFramesPerWrite = 10;
-
-        // ~500 ms of audio; beyond that we drop the oldest frames rather than drift behind.
-        readonly Channel<byte[]> queue = Channel.CreateBounded<byte[]>(
-            new BoundedChannelOptions(QueueCapacity) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true, SingleWriter = true });
-        int dropped;
-
-        public void Enqueue(byte[] frame)
-        {
-            if (queue.Reader.Count == QueueCapacity)
-                Interlocked.Increment(ref dropped);
-            queue.Writer.TryWrite(frame);
-        }
-
-        public async Task Run(CancellationToken stoppingToken)
-        {
-            var stream = socket.OutputStream!;
-            AuraProtocol.WriteHeader(stream);
-
-            // Send whatever has queued up as a single write: batches grow by themselves
-            // when the link falls behind, which costs far less than one write per frame.
-            var batch = new MemoryStream();
-            long windowStart = Environment.TickCount64;
-            int sent = 0, writes = 0;
-            var writing = TimeSpan.Zero;
-            while (await queue.Reader.WaitToReadAsync(stoppingToken))
-            {
-                batch.SetLength(0);
-                for (int count = 0; count < MaxFramesPerWrite && queue.Reader.TryRead(out var frame); count++)
-                {
-                    AuraProtocol.WriteFrame(batch, frame);
-                    sent++;
-                }
-                long writeStart = Stopwatch.GetTimestamp();
-                stream.Write(batch.GetBuffer(), 0, (int)batch.Length);
-                stream.Flush();
-                writing += Stopwatch.GetElapsedTime(writeStart);
-                writes++;
-
-                long elapsed = Environment.TickCount64 - windowStart;
-                if (elapsed >= 5_000)
-                {
-                    // Below 50 frames/s the Bluetooth link cannot keep up with real time.
-                    Log.Info(AuraLog.Tag, $"tx {sent * 1000.0 / elapsed:F1} frames/s, {(double)sent / writes:F1} frames/write, {writing.TotalMilliseconds / writes:F1} ms/write, "
-                        + $"queued {queue.Reader.Count}, dropped {Interlocked.Exchange(ref dropped, 0)}");
-                    windowStart = Environment.TickCount64;
-                    sent = writes = 0;
-                    writing = TimeSpan.Zero;
-                }
-            }
-        }
-
-        public void Dispose()
-        {
-            queue.Writer.TryComplete();
-            socket.Close();
-        }
     }
 
     sealed class ProjectionStoppedCallback(Service service) : MediaProjection.Callback

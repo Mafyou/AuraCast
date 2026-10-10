@@ -1,8 +1,9 @@
 namespace AuraMusic.Mobile.Casting;
 
 /// <summary>
-/// Listener side: finds the master among the paired phones, connects over Bluetooth Classic RFCOMM,
-/// decodes the Opus frames and plays them. Reconnects automatically when the master goes away.
+/// Listener side: follows the master over Bluetooth Classic RFCOMM and, when both phones are on the same
+/// Wi-Fi, over TCP at the same time. Each link feeds the same jitter buffer through a <see cref="SequenceGate"/>,
+/// so the first copy of every packet is played and a stalling link costs nothing. Reconnects on its own.
 /// </summary>
 [Service(Exported = false, ForegroundServiceType = ForegroundService.TypeMediaPlayback)]
 public sealed class ListenService : Service
@@ -22,11 +23,21 @@ public sealed class ListenService : Service
     static readonly FrozenSet<MajorDeviceClass> MasterDeviceClasses = [MajorDeviceClass.Phone, MajorDeviceClass.Computer];
     const string LastMasterKey = "lastMasterAddress";
 
+    static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(2);
+    static readonly TimeSpan WifiConnectTimeout = TimeSpan.FromSeconds(3);
+
     // Spectrum levels waiting for their audio to be played; bounded in case the AudioTrack stalls.
     const int MaxPendingLevels = 50;
 
     CancellationTokenSource? cts;
     readonly OutputGain gain = new();
+    readonly SequenceGate gate = new();
+    readonly ReceiveStats stats = new();
+    readonly Channel<byte[]> packets = Channel.CreateBounded<byte[]>(
+        new BoundedChannelOptions(MaxBufferedFrames) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true });
+    readonly Lock linksLock = new();
+    int bluetoothLinks, wifiLinks;
+    string master = "AuraMusic";
     AudioFocusRequestClass? focusRequest;
     NoisyReceiver? noisyReceiver;
 
@@ -45,18 +56,13 @@ public sealed class ListenService : Service
         AuraNotifications.StartForeground(this, AppStrings.NotificationListening, ForegroundService.TypeMediaPlayback);
         RequestAudioFocus();
         WatchHeadphones();
-
-        var adapter = ((BluetoothManager)GetSystemService(BluetoothService)!).Adapter;
-        if (adapter is not { IsEnabled: true })
-        {
-            AuraHub.Publish(new Failed(AppStrings.ErrorBluetoothOffListen));
-            StopSelf();
-            return StartCommandResult.NotSticky;
-        }
+        AuraHub.Publish(new Searching());
 
         cts = new CancellationTokenSource();
         var stoppingToken = cts.Token;
-        _ = Task.Run(() => RunAsync(adapter, stoppingToken));
+        new Thread(() => Play(packets.Reader, stats, gain, stoppingToken)) { IsBackground = true, Name = "AuraMusic playback" }.Start();
+        _ = Task.Run(() => BluetoothLoopAsync(stoppingToken));
+        _ = Task.Run(() => WifiLoopAsync(stoppingToken));
         return StartCommandResult.NotSticky;
     }
 
@@ -85,16 +91,20 @@ public sealed class ListenService : Service
             RegisterReceiver(noisyReceiver, filter);
     }
 
-    async Task RunAsync(BluetoothAdapter adapter, CancellationToken stoppingToken)
+    async Task BluetoothLoopAsync(CancellationToken stoppingToken)
     {
+        var adapter = ((BluetoothManager)GetSystemService(BluetoothService)!).Adapter;
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                AuraHub.Publish(new Searching());
                 using var socket = ConnectToMaster(adapter, stoppingToken);
                 if (socket is not null)
-                    Listen(socket, gain, stoppingToken);
+                {
+                    using var closeOnStop = stoppingToken.Register(socket.Close);
+                    var name = socket.RemoteDevice?.Name ?? "AuraMusic";
+                    ReadLink(socket.InputStream!, Links.Bluetooth, name, stoppingToken);
+                }
             }
             catch (Exception) when (stoppingToken.IsCancellationRequested)
             {
@@ -103,35 +113,35 @@ public sealed class ListenService : Service
             catch (InvalidDataException ex)
             {
                 AuraHub.Publish(new Failed(ex.Message));
+                StopSelf();
+                return;
             }
             catch (Exception ex) when (ex is IOException or Java.IO.IOException)
             {
                 // The master stopped or went out of range (streams wrap Java's IOException in System.IO's).
             }
-            catch (Exception ex)
+            catch (UnavailableException ex)
             {
-                AuraHub.Publish(new Failed(ex.Message));
-                StopSelf();
-                return;
+                // Bluetooth off or nothing paired: not fatal, the Wi-Fi link may still find the master.
+                ReportProblem(ex.Message);
             }
 
             // Master not broadcasting yet, stopped, or out of range: look for it again.
-            await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+            await Task.Delay(RetryDelay, stoppingToken).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
         }
     }
 
     /// <summary>Tries each paired phone (last master first) until one accepts on the AuraMusic service.</summary>
-    static BluetoothSocket? ConnectToMaster(BluetoothAdapter adapter, CancellationToken stoppingToken)
+    static BluetoothSocket? ConnectToMaster(BluetoothAdapter? adapter, CancellationToken stoppingToken)
     {
         // Checked first: with Bluetooth off the paired list reads empty, which would wrongly ask to pair.
-        if (!adapter.IsEnabled)
-            throw new InvalidOperationException(AppStrings.ErrorBluetoothOffListen);
-
+        if (adapter is not { IsEnabled: true })
+            throw new UnavailableException(AppStrings.ErrorBluetoothOffListen);
         var phones = adapter.BondedDevices?
             .Where(device => device.BluetoothClass is { } deviceClass && MasterDeviceClasses.Contains(deviceClass.MajorDeviceClass))
             .ToList() ?? [];
         if (phones.Count == 0)
-            throw new InvalidOperationException(AppStrings.ErrorPairFirst);
+            throw new UnavailableException(AppStrings.ErrorPairFirst);
 
         var lastMaster = Preferences.Get(LastMasterKey, null);
         var uuid = Java.Util.UUID.FromString(AuraProtocol.ServiceUuid.ToString());
@@ -155,45 +165,138 @@ public sealed class ListenService : Service
         return null;
     }
 
-    static void Listen(BluetoothSocket socket, OutputGain gain, CancellationToken stoppingToken)
+    /// <summary>Listens for masters' beacons on the local network and follows one over TCP.</summary>
+    async Task WifiLoopAsync(CancellationToken stoppingToken)
     {
-        using var closeOnStop = stoppingToken.Register(socket.Close);
-        var stream = socket.InputStream!;
-        AuraProtocol.ReadHeader(stream);
-        AuraHub.Publish(new Listening(socket.RemoteDevice?.Name ?? "AuraMusic"));
-        Receive(stream, gain, stoppingToken);
+        // Some phones drop broadcast datagrams while the screen is off unless a multicast lock is held.
+        var wifi = (global::Android.Net.Wifi.WifiManager?)GetSystemService(WifiService);
+        var multicast = wifi?.CreateMulticastLock("AuraMusic");
+        multicast?.Acquire();
+        try
+        {
+            using var beacons = new UdpClient(AddressFamily.InterNetwork);
+            beacons.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+            beacons.Client.Bind(new IPEndPoint(IPAddress.Any, LanBeacon.UdpPort));
+
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                var received = await beacons.ReceiveAsync(stoppingToken);
+                if (!LanBeacon.TryDecode(received.Buffer, out var beacon) || !IsOurMaster(beacon))
+                    continue;
+                try
+                {
+                    await FollowOverWifiAsync(received.RemoteEndPoint.Address, beacon, stoppingToken);
+                }
+                catch (Exception ex) when (!stoppingToken.IsCancellationRequested
+                    && ex is IOException or SocketException or InvalidDataException or System.OperationCanceledException)
+                {
+                    // Lost the Wi-Fi link: Bluetooth (if any) carries on, and the next beacon reconnects.
+                }
+            }
+        }
+        catch (Exception ex) when (stoppingToken.IsCancellationRequested || ex is SocketException)
+        {
+            // Stopping, or the beacon port is unavailable: Bluetooth alone carries the stream.
+        }
+        finally
+        {
+            multicast?.Release();
+        }
     }
 
-    static void Receive(System.IO.Stream stream, OutputGain gain, CancellationToken stoppingToken)
-    {
-        var stats = new ReceiveStats();
-        var packets = Channel.CreateBounded<byte[]>(
-            new BoundedChannelOptions(MaxBufferedFrames) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true, SingleWriter = true });
-        var playback = new Thread(() => Play(packets.Reader, stats, gain, stoppingToken)) { IsBackground = true, Name = "AuraMusic playback" };
-        playback.Start();
+    /// <summary>The broadcast already followed (over Bluetooth or Wi-Fi), else the first master heard.</summary>
+    bool IsOurMaster(LanBeacon beacon) => gate.Session is not { } following || beacon.Session == following;
 
+    async Task FollowOverWifiAsync(IPAddress address, LanBeacon beacon, CancellationToken stoppingToken)
+    {
+        using var client = new TcpClient(AddressFamily.InterNetwork) { NoDelay = true };
+        using (var connecting = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken))
+        {
+            connecting.CancelAfter(WifiConnectTimeout);
+            await client.ConnectAsync(address, beacon.Port, connecting.Token);
+        }
+        using var closeOnStop = stoppingToken.Register(client.Dispose);
+        var stream = client.GetStream();
+        AuraProtocol.WriteHello(stream, DeviceName.Of(this));
+        await Task.Run(() => ReadLink(stream, Links.Wifi, beacon.Name, stoppingToken), stoppingToken);
+    }
+
+    /// <summary>Reads one link until it drops, letting through only the packets the other link has not delivered yet.</summary>
+    void ReadLink(Stream stream, Links link, string name, CancellationToken stoppingToken)
+    {
+        uint session = AuraProtocol.ReadHeader(stream);
+        if (!gate.Join(session))
+            return; // the other link follows another master: do not mix two broadcasts
+
+        LinkUp(link, name);
         try
         {
             var buffer = new byte[AuraProtocol.MaxPacketSize];
             while (!stoppingToken.IsCancellationRequested)
             {
-                int length = AuraProtocol.ReadFrame(stream, buffer);
+                int length = AuraProtocol.ReadFrame(stream, buffer, out uint sequence);
+                stats.Received(link, length);
+                if (!gate.TryAccept(session, sequence))
+                    continue; // the other link was faster
                 if (packets.Reader.Count == MaxBufferedFrames)
-                    stats.Dropped++;
+                    stats.Dropped();
                 packets.Writer.TryWrite(buffer.AsSpan(0, length).ToArray());
-                stats.Received(length);
             }
         }
         finally
         {
-            packets.Writer.TryComplete();
-            playback.Join(TimeSpan.FromSeconds(2));
+            LinkDown(link);
+        }
+    }
+
+    void LinkUp(Links link, string name)
+    {
+        lock (linksLock)
+        {
+            master = name;
+            if (link == Links.Bluetooth)
+                bluetoothLinks++;
+            else
+                wifiLinks++;
+            PublishLinks();
+        }
+    }
+
+    void LinkDown(Links link)
+    {
+        lock (linksLock)
+        {
+            if (link == Links.Bluetooth)
+                bluetoothLinks--;
+            else
+                wifiLinks--;
+            if (bluetoothLinks + wifiLinks == 0)
+                gate.Reset(); // the next master found may be another broadcast
+            PublishLinks();
+        }
+    }
+
+    void PublishLinks()
+    {
+        if (cts?.IsCancellationRequested ?? true)
+            return;
+        var links = (bluetoothLinks > 0 ? Links.Bluetooth : Links.None) | (wifiLinks > 0 ? Links.Wifi : Links.None);
+        AuraHub.Publish(links == Links.None ? new Searching() : new Listening(master, links));
+    }
+
+    /// <summary>Shown while searching, unless the other link is already playing.</summary>
+    void ReportProblem(string problem)
+    {
+        lock (linksLock)
+        {
+            if (bluetoothLinks + wifiLinks == 0 && !(cts?.IsCancellationRequested ?? true))
+                AuraHub.Publish(new Searching(problem));
         }
     }
 
     /// <summary>
     /// Decodes on the playback clock, so a packet that is not there in time gets concealed by Opus
-    /// instead of cutting the sound.
+    /// instead of cutting the sound. Runs for the whole service: while no link is up it just waits.
     /// </summary>
     static void Play(ChannelReader<byte[]> packets, ReceiveStats stats, OutputGain gain, CancellationToken stoppingToken)
     {
@@ -309,40 +412,56 @@ public sealed class ListenService : Service
             Thread.Sleep(5);
     }
 
+    /// <summary>Per-link reception and playout events, logged every 5 s (<c>adb logcat -s AuraMusic</c>).</summary>
     sealed class ReceiveStats : IPlayoutMetrics
     {
+        readonly Lock counters = new();
         long windowStart = Environment.TickCount64;
-        int frames, bytes;
-        int caughtUp, concealed, skipped, rebuffers;
-        public int Dropped;
+        int bluetooth, wifi, bytes, caughtUp, concealed, skipped, rebuffers, dropped;
 
-        public void CaughtUp() => caughtUp++;
+        public void CaughtUp() => Count(ref caughtUp);
 
-        public void Concealed() => concealed++;
+        public void Concealed() => Count(ref concealed);
 
-        public void Skipped() => skipped++;
+        public void Skipped() => Count(ref skipped);
 
-        public void Rebuffered() => rebuffers++;
+        public void Rebuffered() => Count(ref rebuffers);
 
-        public void Received(int packetBytes)
+        public void Dropped() => Count(ref dropped);
+
+        void Count(ref int counter)
         {
-            frames++;
-            bytes += packetBytes + 2;
-            long elapsed = Environment.TickCount64 - windowStart;
-            if (elapsed < 5_000)
-                return;
+            lock (counters)
+                counter++;
+        }
 
-            // 50 frames/s means the link keeps up with real time.
-            Log.Info(AuraLog.Tag, $"rx {frames * 1000.0 / elapsed:F1} frames/s, {bytes * 8.0 / elapsed:F0} kbps, "
-                + $"caught up {caughtUp}, concealed {concealed}, skipped {skipped}, rebuffers {rebuffers}, dropped {Dropped}");
-            windowStart = Environment.TickCount64;
-            frames = bytes = caughtUp = concealed = skipped = rebuffers = Dropped = 0;
+        public void Received(Links link, int packetBytes)
+        {
+            lock (counters)
+            {
+                if (link == Links.Bluetooth)
+                    bluetooth++;
+                else
+                    wifi++;
+                bytes += packetBytes + 6;
+                long elapsed = Environment.TickCount64 - windowStart;
+                if (elapsed < 5_000)
+                    return;
+
+                // 50 frames/s on a link means it keeps up with real time on its own.
+                Log.Info(AuraLog.Tag, $"rx bluetooth {bluetooth * 1000.0 / elapsed:F1} + wifi {wifi * 1000.0 / elapsed:F1} frames/s, "
+                    + $"{bytes * 8.0 / elapsed:F0} kbps, caught up {caughtUp}, concealed {concealed}, skipped {skipped}, "
+                    + $"rebuffers {rebuffers}, dropped {dropped}");
+                windowStart = Environment.TickCount64;
+                bluetooth = wifi = bytes = caughtUp = concealed = skipped = rebuffers = dropped = 0;
+            }
         }
     }
 
     public override void OnDestroy()
     {
         cts?.Cancel();
+        packets.Writer.TryComplete();
         if (focusRequest is not null)
             ((AudioManager)GetSystemService(AudioService)!).AbandonAudioFocusRequest(focusRequest);
         if (noisyReceiver is not null)
@@ -351,6 +470,9 @@ public sealed class ListenService : Service
             AuraHub.Publish(new Idle());
         base.OnDestroy();
     }
+
+    /// <summary>A link cannot be used right now (Bluetooth off, nothing paired); the other one may.</summary>
+    sealed class UnavailableException(string message) : Exception(message);
 
     /// <summary>Output volume the audio focus asks for, read by the playback thread.</summary>
     sealed class OutputGain

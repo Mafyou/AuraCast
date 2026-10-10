@@ -42,7 +42,7 @@ public sealed class AuraHubTests
         {
             Idle or Advertising or Searching => "",
             Streaming(var listeners) => $"{listeners.Length} : {string.Join(", ", listeners)}",
-            Listening(var master) => master,
+            Listening(var master, _) => master,
             Failed(var reason) => reason,
         };
 

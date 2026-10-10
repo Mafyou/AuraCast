@@ -1,8 +1,10 @@
 namespace AuraMusic.Kernel.Protocol;
 
 /// <summary>
-/// Wire format over the Bluetooth RFCOMM socket:
-/// a header ("AURA" + version), then length-prefixed Opus packets of 20 ms each.
+/// Wire format, the same over Bluetooth RFCOMM and Wi-Fi TCP:
+/// a header ("AURA", version, session id), then length-prefixed, numbered Opus packets of 20 ms each.
+/// The session id and the sequence numbers let a listener connected over both links keep the first copy
+/// of every packet and drop the other.
 /// </summary>
 public static class AuraProtocol
 {
@@ -16,47 +18,90 @@ public static class AuraProtocol
     // Bluetooth radio (headphones, distance, several listeners) keeps up.
     public const int Bitrate = 96_000;
     public const int MaxPacketSize = 1275;
+    public const int MaxNameBytes = 64;
 
-    const byte Version = 1;
+    const byte Version = 2;
+    const int HeaderSize = 4 + 1 + 4;
+    const int FramePrefixSize = 2 + 4;
     static ReadOnlySpan<byte> Magic => "AURA"u8;
 
-    public static void WriteHeader(Stream stream)
+    public static void WriteHeader(Stream stream, uint session)
     {
-        Span<byte> header = stackalloc byte[5];
+        Span<byte> header = stackalloc byte[HeaderSize];
         Magic.CopyTo(header);
         header[4] = Version;
+        BinaryPrimitives.WriteUInt32LittleEndian(header[5..], session);
         stream.Write(header);
         stream.Flush();
     }
 
-    public static void ReadHeader(Stream stream)
+    /// <returns>The session id of the broadcast.</returns>
+    public static uint ReadHeader(Stream stream)
     {
-        Span<byte> header = stackalloc byte[5];
-        stream.ReadExactly(header);
+        Span<byte> header = stackalloc byte[HeaderSize];
+        stream.ReadExactly(header[..5]);
         if (!header[..4].SequenceEqual(Magic))
             throw new InvalidDataException(KernelStrings.NotAuraStream);
         if (header[4] != Version)
             throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, KernelStrings.IncompatibleVersion, header[4], Version));
+        stream.ReadExactly(header[5..]);
+        return BinaryPrimitives.ReadUInt32LittleEndian(header[5..]);
     }
 
-    public static void WriteFrame(Stream stream, ReadOnlySpan<byte> packet)
+    public static void WriteFrame(Stream stream, uint sequence, ReadOnlySpan<byte> packet)
     {
-        Span<byte> frame = stackalloc byte[2 + packet.Length];
+        Span<byte> frame = stackalloc byte[FramePrefixSize + packet.Length];
         BinaryPrimitives.WriteUInt16LittleEndian(frame, (ushort)packet.Length);
-        packet.CopyTo(frame[2..]);
+        BinaryPrimitives.WriteUInt32LittleEndian(frame[2..], sequence);
+        packet.CopyTo(frame[FramePrefixSize..]);
         stream.Write(frame);
         stream.Flush();
     }
 
     /// <returns>The packet length written into <paramref name="packet"/>.</returns>
-    public static int ReadFrame(Stream stream, Span<byte> packet)
+    public static int ReadFrame(Stream stream, Span<byte> packet, out uint sequence)
     {
-        Span<byte> length = stackalloc byte[2];
-        stream.ReadExactly(length);
-        int size = BinaryPrimitives.ReadUInt16LittleEndian(length);
+        Span<byte> prefix = stackalloc byte[FramePrefixSize];
+        stream.ReadExactly(prefix);
+        int size = BinaryPrimitives.ReadUInt16LittleEndian(prefix);
+        sequence = BinaryPrimitives.ReadUInt32LittleEndian(prefix[2..]);
         if (size > packet.Length)
             throw new InvalidDataException(string.Format(CultureInfo.CurrentCulture, KernelStrings.FrameTooLarge, size));
         stream.ReadExactly(packet[..size]);
         return size;
+    }
+
+    /// <summary>Sent by a listener over Wi-Fi right after connecting, so the master can show who it is.</summary>
+    public static void WriteHello(Stream stream, string name)
+    {
+        var bytes = Truncate(name);
+        Span<byte> hello = stackalloc byte[1 + bytes.Length];
+        hello[0] = (byte)bytes.Length;
+        bytes.CopyTo(hello[1..]);
+        stream.Write(hello);
+        stream.Flush();
+    }
+
+    public static string ReadHello(Stream stream)
+    {
+        Span<byte> length = stackalloc byte[1];
+        stream.ReadExactly(length);
+        if (length[0] > MaxNameBytes)
+            throw new InvalidDataException(KernelStrings.NotAuraStream);
+        Span<byte> name = stackalloc byte[length[0]];
+        stream.ReadExactly(name);
+        return Encoding.UTF8.GetString(name);
+    }
+
+    /// <summary>UTF-8 bytes of <paramref name="name"/>, cut to <see cref="MaxNameBytes"/> on a character boundary.</summary>
+    internal static byte[] Truncate(string name)
+    {
+        var bytes = Encoding.UTF8.GetBytes(name);
+        if (bytes.Length <= MaxNameBytes)
+            return bytes;
+        int cut = MaxNameBytes;
+        while (cut > 0 && (bytes[cut] & 0xC0) == 0x80) // do not split a multi-byte character
+            cut--;
+        return bytes[..cut];
     }
 }
