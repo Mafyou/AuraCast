@@ -39,6 +39,9 @@ public sealed class ListenService : Service
     const int SettleStepMs = 60;
     const int SettleLimitMs = 900;
 
+    // A latency raised by this much at once (Wi-Fi lost, the slider pushed up) is reached by pausing to refill.
+    const int RefillAboveMs = 100;
+
     // Spectrum levels waiting for their audio to be played; bounded in case the AudioTrack stalls.
     const int MaxPendingLevels = 50;
 
@@ -417,41 +420,53 @@ public sealed class ListenService : Service
         float volume = 1;
         long dryAt = 0; // when playback ran out of packets, until it has some again
 
-        void Retarget()
+        // True when much more must now be kept in hand than what is there: playing slower would take minutes
+        // to get there, with the sound at the mercy of the first stall.
+        bool Retarget()
         {
             int wanted = PlayoutTuning.LatencyFor(stats.Links) + adaptive.ExtraMs;
             if (wanted == latency)
-                return;
+                return false;
+            bool farAbove = wanted - latency >= RefillAboveMs;
             latency = wanted; // the sync slider moved, Wi-Fi came or went, or the link needs more in hand
             reachable = PlayoutTuning.ReachableLatencyMs(latency, outputMs);
             playout.SetCushion(PlayoutTuning.CushionFrames(latency, outputMs));
             drift.TargetMs = reachable;
+            return farAbove;
+        }
+
+        // Silent while it lasts: waits for the cushion to be in hand, lets the link finish pouring out what it
+        // held back, and drops what exceeds the cushion (decoded, to keep the codec in step) rather than play
+        // late and shorten packets for the next half minute.
+        void Refill()
+        {
+            Retarget();
+            Prebuffer(packets, playout.PrebufferFrames, stoppingToken);
+            Settle(packets, stoppingToken);
+            while (packets.Count > playout.PrebufferFrames && packets.TryRead(out var stale))
+                decoder.Decode(stale, pcm, AuraProtocol.FrameSamples);
+            playout.Resynced();
+            drift.Restart();
         }
 
         track.Play();
         try
         {
-            Prebuffer(packets, playout.PrebufferFrames, stoppingToken);
+            // Which link carries the sound, and so how much to keep in hand, is only known once one delivers.
+            Prebuffer(packets, 1, stoppingToken);
+            Refill();
             while (!packets.Completion.IsCompleted && !stoppingToken.IsCancellationRequested)
             {
                 if (dryAt != 0 && packets.Count > 0)
                 {
                     // Back after a stall. The sound is cut anyway, so this is the moment to put things right
-                    // without it being heard: keep what the stall showed was missing, wait for that much to be
-                    // in hand, let the link finish pouring out what it held back, and drop what exceeds the
-                    // cushion (decoded, to keep the codec in step) rather than play late and shorten packets
-                    // for the next half minute.
+                    // without it being heard, starting with keeping in hand what the stall showed was missing.
                     adaptive.Stalled(Stopwatch.GetElapsedTime(dryAt));
                     dryAt = 0;
-                    Retarget();
-                    Prebuffer(packets, playout.PrebufferFrames, stoppingToken);
-                    Settle(packets, stoppingToken);
-                    while (packets.Count > playout.PrebufferFrames && packets.TryRead(out var stale))
-                        decoder.Decode(stale, pcm, AuraProtocol.FrameSamples);
-                    playout.Resynced();
-                    drift.Restart();
+                    Refill();
                 }
-                Retarget();
+                else if (Retarget())
+                    Refill();
 
                 if (!packets.TryRead(out var packet))
                     packet = WaitForLatePacket(packets, track, written, stoppingToken);
