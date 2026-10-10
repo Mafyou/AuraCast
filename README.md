@@ -35,6 +35,7 @@ Hors de la maison, sans Wi-Fi commun : l'un active son partage de connexion et l
 - **Liens morts** : le master envoie un signal de vie chaque seconde quand il n'y a pas de son ; un lien muet 5 s est fermé et se reconnecte.
 - **Protocole** (v3) : le master envoie un en-tête `AURA` + version + identifiant de session, l'auditeur répond par un « hello » (identifiant du téléphone + nom), puis viennent des paquets Opus préfixés par leur longueur et leur numéro, et des trames vides en signal de vie (`src/AuraMusic.Kernel/Protocol/AuraProtocol.cs`).
 - **Lecture** : thread en priorité audio Android, sortie en virgule flottante. Un paquet en retard n'est comblé (dissimulation d'Opus) que si la sortie audio va manquer de son ; un retard accumulé est rattrapé en raccourcissant les trames de 1 ms avec un fondu, sans clic.
+- **Blocages radio** : en Bluetooth seul, ou dans une pièce pleine de monde, la liaison se fige par moments. Quand la lecture tombe à sec, le délai est relevé d'un cran (`AdaptiveLatency`, jusqu'à 400 ms de plus) pour que le blocage suivant passe inaperçu, puis redescend après cinq minutes de calme. Après une vraie coupure, l'excédent arrivé en rafale est écarté d'un coup, pendant le silence, plutôt que rattrapé en raccourcissant des trames pendant de longues secondes. Le rattrapage se décide sur la tendance du tampon, pas sur ses pointes.
 - **Dérive d'horloge** : les quartz des deux téléphones ne battent pas exactement à la même vitesse. `DriftController` surveille le son en attente et ajuste la vitesse de lecture d'au plus ±0,3 % (inaudible) pour le garder sur la cible, au lieu de laisser le tampon se vider ou déborder au fil des minutes.
 - **Curseur de synchro** : pendant l'écoute, un curseur règle le délai total de 100 à 500 ms (200 par défaut) ; la cible n'est jamais plus basse que ce que la sortie audio du téléphone permet, plus deux paquets d'avance. En Bluetooth seul, elle ne descend pas sous 320 ms : la liaison arrive par rafales et se fige quelques centaines de millisecondes à chaque balayage Wi-Fi du téléphone. À gauche, le son colle à celui du master (même pièce) ; à droite, il encaisse mieux les à-coups radio. Le réglage s'applique en direct et est mémorisé (`PlayoutTuning`).
 - **Diagnostic** : un double appui sur l'image de l'accueil ouvre un écran de chiffres en direct (codec, débit, trames par seconde de chaque lien, tampon, dérive, pertes), fourni par `DiagnosticsHub`.
@@ -49,7 +50,7 @@ Hors de la maison, sans Wi-Fi commun : l'un active son partage de connexion et l
 - `src/AuraMusic.Kernel` : la logique sans dépendance Android, testable.
   - `State/` : l'état de l'app, une union `AuraState` publiée par `AuraHub` ;
   - `Protocol/` : le format des données échangées ;
-  - `Playout/` : `PlayoutController`, qui décide toutes les 20 ms de jouer, rattraper, combler, sauter ou rebufferiser (une union `PlayoutStep`), `PcmCrossfade`, `DriftController` (dérive d'horloge) et `PlayoutTuning` (délai choisi au curseur) ;
+  - `Playout/` : `PlayoutController`, qui décide toutes les 20 ms de jouer, rattraper, combler, sauter ou rebufferiser (une union `PlayoutStep`), `PcmCrossfade`, `DriftController` (dérive d'horloge), `AdaptiveLatency` (délai appris des blocages) et `PlayoutTuning` (délai choisi au curseur) ;
   - `Diagnostics/` : les relevés du master et de l'écoute (une union `DiagnosticsReport`) et leur mise en texte ;
   - `Spectrum/` : l'analyseur de spectre ;
   - `Updates/` : lecture de la dernière release GitHub et comparaison des versions (une union `UpdateCheck`) ;
@@ -81,7 +82,7 @@ adb logcat -s AuraMusic
 ```
 
 - côté master : `tx … frames/s, … frames/write, … ms/write, queued, dropped` ;
-- côté écoute : `rx … frames/s, … kbps, concealed, skipped, rebuffers, dropped`.
+- côté écoute : `rx … frames/s, … kbps, buffer, drift, caught up, concealed, skipped, rebuffers, dropped, underruns, longest gap, gc` (`underruns` : la sortie audio est tombée à sec ; `longest gap` : plus long intervalle entre deux paquets joués).
 
 50 trames/s veut dire que la liaison suit le temps réel.
 
