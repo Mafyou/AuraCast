@@ -27,7 +27,7 @@
 			Versions. The display version is the one released: raise it here, and the release workflow tags and
 			publishes exactly that number. The version code below is replaced by the workflow at each release.
 		-->
-		<ApplicationDisplayVersion>1.7.2</ApplicationDisplayVersion>
+		<ApplicationDisplayVersion>1.7.3</ApplicationDisplayVersion>
 		<ApplicationVersion>1</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->

@@ -22,7 +22,7 @@
   <data name="HintAdvertising" xml:space="preserve"><value>Sur l'autre téléphone, appuie sur « Écouter ».</value></data>
   <data name="StatusStreamingOne" xml:space="preserve"><value>&gt; 1 oreille connectée</value></data>
   <data name="StatusStreamingMany" xml:space="preserve"><value>&gt; {0} oreilles connectées</value></data>
-  <data name="HintStreaming" xml:space="preserve"><value>Lance ta musique, dans n'importe quelle app : elle est partagée en direct.</value></data>
+  <data name="HintStreaming" xml:space="preserve"><value>Lance ta musique : elle est partagée en direct. Certaines apps, comme Spotify, bloquent le partage de leur son : essaie alors YouTube Music.</value></data>
   <data name="StatusSearching" xml:space="preserve"><value>&gt; recherche du signal_</value></data>
   <data name="HintSearching" xml:space="preserve"><value>Téléphones appairés en Bluetooth, à quelques mètres ou sur le même Wi-Fi.</value></data>
   <data name="StatusListening" xml:space="preserve"><value>&gt; connecté à {0}</value></data>
@@ -36,7 +36,7 @@
   <data name="TutorialPairTitle" xml:space="preserve"><value>Relie les téléphones</value></data>
   <data name="TutorialPairText" xml:space="preserve"><value>Une seule fois : appairez les téléphones en Bluetooth (Réglages › Bluetooth › Associer un nouvel appareil). Ensuite, sur le même Wi-Fi, le son passe aussi par le Wi-Fi : plus stable et de meilleure qualité.</value></data>
   <data name="TutorialBroadcastTitle" xml:space="preserve"><value>Diffuse</value></data>
-  <data name="TutorialBroadcastText" xml:space="preserve"><value>Celui qui a la musique appuie sur « Diffuser mon son » et accepte les autorisations. Android parle d'« enregistrement de l'écran » : c'est sa façon de laisser AuraMusic capter le son, rien n'est enregistré. Lance ensuite ta musique, dans n'importe quelle app.</value></data>
+  <data name="TutorialBroadcastText" xml:space="preserve"><value>Celui qui a la musique appuie sur « Diffuser mon son » et accepte les autorisations. Android parle d'« enregistrement de l'écran » : c'est sa façon de laisser AuraMusic capter le son, rien n'est enregistré. Lance ensuite ta musique. Attention : certaines apps, comme Spotify, interdisent qu'on capte leur son, et les autres n'entendent alors rien. YouTube Music fonctionne.</value></data>
   <data name="TutorialListenTitle" xml:space="preserve"><value>Capte</value></data>
   <data name="TutorialListenText" xml:space="preserve"><value>Les autres appuient sur « Écouter » : leur téléphone trouve tout seul celui qui diffuse et se reconnecte si vous vous éloignez. L'écran peut être éteint.</value></data>
   <data name="TutorialAnywhereTitle" xml:space="preserve"><value>Partout</value></data>
@@ -66,6 +66,6 @@
   <data name="UpdateUpToDate" xml:space="preserve"><value>Tu as déjà la dernière version ({0}).</value></data>
   <data name="UpdateCheckFailed" xml:space="preserve"><value>Impossible de vérifier les mises à jour : {0}</value></data>
   <data name="UpdateCheckTitle" xml:space="preserve"><value>Mises à jour</value></data>
-  <data name="HintStreamingWith" xml:space="preserve"><value>À l'écoute : {0}. Lance ta musique, dans n'importe quelle app : elle est partagée en direct.</value></data>
+  <data name="HintStreamingWith" xml:space="preserve"><value>À l'écoute : {0}. Lance ta musique : elle est partagée en direct. Pas de son chez eux ? Certaines apps, comme Spotify, bloquent le partage : essaie YouTube Music.</value></data>
   <data name="HintListeningVia" xml:space="preserve"><value>Via {0}. Tu entends sa musique en direct, même écran éteint.</value></data>
 </root>
