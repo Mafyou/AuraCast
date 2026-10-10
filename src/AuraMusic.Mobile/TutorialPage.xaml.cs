@@ -6,7 +6,8 @@ namespace AuraMusic.Mobile
     {
         const string SeenKey = "tutorialSeen";
 
-        static readonly ImmutableArray<TutorialStep> All =
+        // Per page, not static: the texts are looked up in the language of the moment, which can be switched.
+        readonly ImmutableArray<TutorialStep> all =
         [
             new("⚡", AppStrings.TutorialWelcomeTitle, AppStrings.TutorialWelcomeText),
             new("🔗", AppStrings.TutorialPairTitle, AppStrings.TutorialPairText),
@@ -19,7 +20,7 @@ namespace AuraMusic.Mobile
         public TutorialPage()
         {
             InitializeComponent();
-            Steps.ItemsSource = All;
+            Steps.ItemsSource = all;
         }
 
         readonly TaskCompletionSource closed = new();
@@ -30,11 +31,11 @@ namespace AuraMusic.Mobile
         public Task Closed => closed.Task;
 
         void OnPositionChanged(object? sender, PositionChangedEventArgs e) =>
-            NextButton.Text = e.CurrentPosition == All.Length - 1 ? AppStrings.TutorialDone : AppStrings.TutorialNext;
+            NextButton.Text = e.CurrentPosition == all.Length - 1 ? AppStrings.TutorialDone : AppStrings.TutorialNext;
 
         async void OnNextClicked(object? sender, EventArgs e)
         {
-            if (Steps.Position < All.Length - 1)
+            if (Steps.Position < all.Length - 1)
                 Steps.Position++;
             else
                 await CloseAsync();
