@@ -22,6 +22,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Every change ships under its own number: the release workflow tags the csproj's version, so a pull
+      # request must raise it above the one on the branch it merges into, and never reuse a published one.
+      # Checked in this job because the protection of main requires it.
+      - name: Check the version was raised
+        run: |
+          CSPROJ=src/AuraMusic.Mobile/AuraMusic.Mobile.csproj
+          read_version() { sed -n 's:.*<ApplicationDisplayVersion>\(.*\)</ApplicationDisplayVersion>.*:\1:p'; }
+
+          VERSION=$(read_version < "$CSPROJ")
+          git fetch --quiet --depth=1 origin "$GITHUB_BASE_REF"
+          BASE=$(git show "FETCH_HEAD:$CSPROJ" | read_version)
+
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::ApplicationDisplayVersion '$VERSION' is not a version like 1.7.0."
+            exit 1
+          fi
+          HIGHEST=$(printf '%s\n%s\n' "$BASE" "$VERSION" | sort -V | tail -n 1)
+          if [ "$VERSION" = "$BASE" ] || [ "$HIGHEST" != "$VERSION" ]; then
+            echo "::error::ApplicationDisplayVersion is $VERSION and $GITHUB_BASE_REF is at $BASE: raise it in $CSPROJ."
+            exit 1
+          fi
+          if [ -n "$(git ls-remote --tags origin "refs/tags/v$VERSION")" ]; then
+            echo "::error::v$VERSION is already published: raise ApplicationDisplayVersion in $CSPROJ."
+            exit 1
+          fi
+          echo "This pull request raises the version from $BASE to $VERSION."
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
