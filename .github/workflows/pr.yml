@@ -22,6 +22,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Every change ships under its own number: the release workflow tags the csproj's version, so a pull
+      # request that leaves it on an already published one could not be released. Checked in this job
+      # because the protection of main requires it.
+      - name: Check the version was raised
+        run: |
+          VERSION=$(sed -n 's:.*<ApplicationDisplayVersion>\(.*\)</ApplicationDisplayVersion>.*:\1:p' src/AuraMusic.Mobile/AuraMusic.Mobile.csproj)
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::ApplicationDisplayVersion '$VERSION' is not a version like 1.7.0."
+            exit 1
+          fi
+          if [ -n "$(git ls-remote --tags origin "refs/tags/v$VERSION")" ]; then
+            echo "::error::v$VERSION is already published: raise ApplicationDisplayVersion in src/AuraMusic.Mobile/AuraMusic.Mobile.csproj."
+            exit 1
+          fi
+          echo "This pull request will ship as v$VERSION."
+
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json

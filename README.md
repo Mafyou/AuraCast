@@ -87,13 +87,13 @@ adb logcat -s AuraMusic
 
 ### Intégration continue
 
-`main` est protégée : tout passe par une pull request. Sur chacune, [le workflow de vérification](.github/workflows/pr.yml) lance les tests du Kernel et compile l'app Android en Release, **warnings traités comme des erreurs** ; les deux doivent être au vert pour fusionner.
+`main` est protégée : tout passe par une pull request. Sur chacune, [le workflow de vérification](.github/workflows/pr.yml) lance les tests du Kernel et compile l'app Android en Release, **warnings traités comme des erreurs** ; les deux doivent être au vert pour fusionner. Il vérifie aussi que la version du csproj a été montée : une pull request qui la laisse sur un numéro déjà publié est refusée.
 
 ### Release
 
 Le numéro de version vit dans `src/AuraMusic.Mobile/AuraMusic.Mobile.csproj` (`ApplicationDisplayVersion`). Pour publier :
 
-1. monter ce numéro dans une pull request, et la fusionner ;
+1. chaque pull request monte ce numéro (c'est vérifié), il n'y a donc rien de plus à faire qu'à la fusionner ;
 2. lancer à la main [le workflow de release](.github/workflows/ci.yml) sur `main` : **Actions › Release AuraMusic APK › Run workflow**, ou :
 
 ```sh
