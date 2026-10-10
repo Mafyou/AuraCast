@@ -9,6 +9,13 @@
   <data name="BroadcastButton" xml:space="preserve"><value>&gt; DIFFUSER MON SON</value></data>
   <data name="ListenButton" xml:space="preserve"><value>&gt; ÉCOUTER</value></data>
   <data name="StopButton" xml:space="preserve"><value>■ ARRÊTER</value></data>
+  <data name="SyncDescription" xml:space="preserve"><value>Réglage de la synchro</value></data>
+  <data name="SyncCloser" xml:space="preserve"><value>au plus près</value></data>
+  <data name="SyncSteadier" xml:space="preserve"><value>plus stable</value></data>
+  <data name="SyncDelay" xml:space="preserve"><value>délai {0} ms</value></data>
+  <data name="DiagnosticsTitle" xml:space="preserve"><value>Diagnostic</value></data>
+  <data name="DiagnosticsClose" xml:space="preserve"><value>&gt; FERMER</value></data>
+  <data name="DiagnosticsIdle" xml:space="preserve"><value>Rien en cours : lance une diffusion ou une écoute pour voir les chiffres.</value></data>
   <data name="StatusIdle" xml:space="preserve"><value>&gt; que veux-tu faire ?</value></data>
   <data name="HintIdle" xml:space="preserve"><value>Diffuse ta musique, ou écoute celle d'un téléphone à côté.</value></data>
   <data name="StatusAdvertising" xml:space="preserve"><value>&gt; signal émis_</value></data>

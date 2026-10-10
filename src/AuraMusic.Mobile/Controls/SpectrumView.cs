@@ -58,9 +58,9 @@ public sealed class SpectrumView : ContentView
         public const int Rows = 8; // must match spectrum_stencil.png
         const float Decay = 0.82f; // falls smoothly instead of flickering with every frame
 
-        static readonly Color Unlit = Color.FromArgb("#1400C853");
-        static readonly Color Lit = Color.FromArgb("#DD00C853");
-        static readonly Color Head = Color.FromArgb("#C8FFE0");
+        static readonly Color Unlit = Theme.Color("MatrixSpectrumUnlit");
+        static readonly Color Lit = Theme.Color("MatrixSpectrumLit");
+        static readonly Color Head = Theme.Color("MatrixHead");
 
         readonly float[] shown = new float[SpectrumHub.Bands];
 

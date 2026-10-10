@@ -5,7 +5,7 @@ public sealed class MatrixDialog : Popup<bool>
 {
     MatrixDialog(string title, string message, string accept, string? cancel)
     {
-        BackgroundColor = Colors.Transparent;
+        BackgroundColor = Theme.Color("MatrixClear"); // the Border below is the dialog
         Padding = 0;
         Margin = new Thickness(24, 0);
 
@@ -13,29 +13,24 @@ public sealed class MatrixDialog : Popup<bool>
         if (cancel is not null)
         {
             buttons.ColumnDefinitions = [new(GridLength.Star), new(GridLength.Star)];
-            buttons.Add(CreateButton(cancel, "MatrixButton", result: false), 0);
+            buttons.Add(CreateButton(cancel, "MatrixDialogButton", result: false), 0);
         }
-        buttons.Add(CreateButton(accept, "MatrixPrimaryButton", result: true), cancel is null ? 0 : 1);
+        buttons.Add(CreateButton(accept, "MatrixDialogPrimaryButton", result: true), cancel is null ? 0 : 1);
 
-        var panel = new Border
+        Content = new Border
         {
-            Style = Resource<Style>("MatrixPanelBorder"),
-            BackgroundColor = Resource<Color>("MatrixBackground"),
-            Stroke = Resource<Color>("MatrixGreen"),
-            Padding = new Thickness(20, 18),
+            Style = Theme.Style("MatrixDialogBorder"),
             Content = new VerticalStackLayout
             {
                 Spacing = 14,
                 Children =
                 {
-                    new Label { Text = $"> {title}", Style = Resource<Style>("MatrixStatus") },
-                    new Label { Text = message, Style = Resource<Style>("MatrixBody") },
+                    new Label { Text = $"> {title}", Style = Theme.Style("MatrixStatus") },
+                    new Label { Text = message, Style = Theme.Style("MatrixBody") },
                     buttons,
                 },
             },
         };
-        panel.Shadow = new Shadow { Brush = Resource<Color>("MatrixGreen"), Radius = 24, Opacity = 0.45f, Offset = new Point(0, 0) };
-        Content = panel;
     }
 
     /// <returns><see langword="true"/> when the user picked <paramref name="accept"/>.</returns>
@@ -44,7 +39,7 @@ public sealed class MatrixDialog : Popup<bool>
         var options = new PopupOptions
         {
             CanBeDismissedByTappingOutsideOfPopup = cancel is not null,
-            PageOverlayColor = Color.FromArgb("#B3000000"),
+            PageOverlayColor = Theme.Color("MatrixOverlay"),
             Shape = null,  // the Border draws the frame
             Shadow = null,
         };
@@ -54,10 +49,8 @@ public sealed class MatrixDialog : Popup<bool>
 
     Button CreateButton(string text, string style, bool result)
     {
-        var button = new Button { Text = text.ToUpperInvariant(), Style = Resource<Style>(style), HeightRequest = 50, FontSize = 15 };
+        var button = new Button { Text = text.ToUpperInvariant(), Style = Theme.Style(style) };
         button.Clicked += async (_, _) => await CloseAsync(result);
         return button;
     }
-
-    static T Resource<T>(string key) => (T)Application.Current!.Resources[key];
 }

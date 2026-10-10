@@ -31,6 +31,9 @@ public sealed class ListenService : Service
     // even if the socket has not noticed (Wi-Fi lost, phone out of range).
     static readonly TimeSpan LinkTimeout = TimeSpan.FromSeconds(5);
 
+    // The playback rate is only touched for a real change: each call crosses into the audio system.
+    const int MinRateStepHz = 2;
+
     // Spectrum levels waiting for their audio to be played; bounded in case the AudioTrack stalls.
     const int MaxPendingLevels = 50;
 
@@ -38,6 +41,8 @@ public sealed class ListenService : Service
     readonly OutputGain gain = new();
     readonly SequenceGate gate = new();
     readonly ReceiveStats stats = new();
+    static readonly TimeSpan ReportInterval = TimeSpan.FromSeconds(1);
+    Timer? reportTimer;
     readonly Channel<byte[]> packets = Channel.CreateBounded<byte[]>(
         new BoundedChannelOptions(MaxBufferedFrames) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true });
     readonly Lock linksLock = new();
@@ -66,6 +71,7 @@ public sealed class ListenService : Service
         cts = new CancellationTokenSource();
         var stoppingToken = cts.Token;
         new Thread(() => Play(packets.Reader, stats, gain, stoppingToken)) { IsBackground = true, Name = "AuraMusic playback" }.Start();
+        reportTimer = new Timer(_ => stats.Publish(), null, ReportInterval, ReportInterval);
         _ = Task.Run(() => BluetoothLoopAsync(stoppingToken));
         _ = Task.Run(() => WifiLoopAsync(stoppingToken));
         return StartCommandResult.NotSticky;
@@ -337,6 +343,7 @@ public sealed class ListenService : Service
         if (cts?.IsCancellationRequested ?? true)
             return;
         var links = (bluetoothLinks > 0 ? Links.Bluetooth : Links.None) | (wifiLinks > 0 ? Links.Wifi : Links.None);
+        stats.Links = links;
         AuraHub.Publish(links == Links.None ? new Searching() : new Listening(master, links));
     }
 
@@ -363,6 +370,7 @@ public sealed class ListenService : Service
         // Float output: codec overshoots cannot clip, and it is what the Android mixer works in anyway.
         int minBuffer = AudioTrack.GetMinBufferSize(AuraProtocol.SampleRate, ChannelOut.Stereo, AudioEncoding.PcmFloat);
         int hundredMs = AuraProtocol.SampleRate / 10 * AuraProtocol.Channels * sizeof(float);
+        int outputShareFrames = AuraProtocol.SampleRate * PlayoutTuning.OutputShareMs / 1000;
         using var track = new AudioTrack.Builder()
             .SetAudioAttributes(new AudioAttributes.Builder()!
                 .SetUsage(AudioUsageKind.Media)!
@@ -376,12 +384,21 @@ public sealed class ListenService : Service
             .SetTransferMode(AudioTrackMode.Stream)!
             .SetBufferSizeInBytes(Math.Max(minBuffer * 4, hundredMs))!
             .Build();
+        // Only a small, known share of the latency lives in the output: the rest is the jitter buffer, which
+        // the sync setting and the drift controller can then actually steer.
+        track.SetBufferSizeInFrames(outputShareFrames);
 
         using var decoder = OpusCodec.CreateDecoder(AuraProtocol.SampleRate, AuraProtocol.Channels);
         Log.Info(AuraLog.Tag, decoder.IsNative ? "decoder: libopus" : "decoder: managed fallback (libopus did not load)");
+        stats.NativeCodec = decoder.IsNative;
         var pcm = new float[AuraProtocol.FrameSamples * AuraProtocol.Channels];
 
+        int latency = PlayoutTuning.TargetLatencyMs;
         var playout = new PlayoutController(stats);
+        playout.SetCushion(PlayoutTuning.CushionFrames(latency));
+        // Plays a hair faster or slower so the buffer stays on target despite the two phones' clocks differing.
+        var drift = new DriftController(AuraProtocol.SampleRate) { TargetMs = latency };
+        int playbackRate = AuraProtocol.SampleRate;
         var analyzer = new SpectrumAnalyzer(SpectrumHub.Bands, AuraProtocol.SampleRate, AuraProtocol.Channels);
         // Levels wait here until their audio actually comes out of the speaker, so the visualizer is in sync.
         var pendingLevels = new Queue<(uint PlayedAt, float[] Levels)>();
@@ -393,6 +410,13 @@ public sealed class ListenService : Service
             Prebuffer(packets, playout.PrebufferFrames, stoppingToken);
             while (!packets.Completion.IsCompleted && !stoppingToken.IsCancellationRequested)
             {
+                if (PlayoutTuning.TargetLatencyMs is var wanted && wanted != latency)
+                {
+                    latency = wanted; // the sync slider moved
+                    playout.SetCushion(PlayoutTuning.CushionFrames(latency));
+                    drift.TargetMs = latency;
+                }
+
                 if (!packets.TryRead(out var packet))
                     packet = WaitForLatePacket(packets, track, written, stoppingToken);
 
@@ -413,7 +437,9 @@ public sealed class ListenService : Service
                         decoder.Decode(data, pcm, AuraProtocol.FrameSamples);
                         continue;
                     case Rebuffer:
+                        stats.Playing(0, latency, 0); // ran dry: say so rather than leave the last good figures on screen
                         Prebuffer(packets, playout.PrebufferFrames, stoppingToken);
+                        drift.Restart();
                         continue;
                 }
 
@@ -421,6 +447,13 @@ public sealed class ListenService : Service
                     track.SetVolume(volume = gain.Value); // audio focus: ducked, silenced or back
                 track.Write(pcm, 0, length, WriteMode.Blocking); // paces the loop to the playback clock
                 written += (uint)(length / AuraProtocol.Channels);
+
+                uint played = (uint)track.PlaybackHeadPosition;
+                double bufferedMs = (packets.Count * AuraProtocol.FrameSamples + (double)(written - played)) * 1000 / AuraProtocol.SampleRate;
+                int rate = drift.Update(bufferedMs);
+                if (Math.Abs(rate - playbackRate) >= MinRateStepHz)
+                    track.SetPlaybackRate(playbackRate = rate);
+                stats.Playing((int)bufferedMs, latency, drift.Correction * 1e6);
 
                 // The visualizer only needs 25 updates a second, and none while nothing shows it.
                 if (!SpectrumHub.IsObserved)
@@ -433,7 +466,6 @@ public sealed class ListenService : Service
                         pendingLevels.Dequeue();
                     pendingLevels.Enqueue((written, levels));
                 }
-                uint played = (uint)track.PlaybackHeadPosition;
                 while (pendingLevels.TryPeek(out var next) && (int)(played - next.PlayedAt) >= 0)
                     SpectrumHub.Publish(pendingLevels.Dequeue().Levels);
             }
@@ -469,12 +501,24 @@ public sealed class ListenService : Service
             Thread.Sleep(5);
     }
 
-    /// <summary>Per-link reception and playout events, logged every 5 s (<c>adb logcat -s AuraMusic</c>).</summary>
+    /// <summary>
+    /// Per-link reception and playout events: published every second for the diagnostics screen, logged every
+    /// five (<c>adb logcat -s AuraMusic</c>).
+    /// </summary>
     sealed class ReceiveStats : IPlayoutMetrics
     {
+        const int LogEveryReports = 5;
+
         readonly Lock counters = new();
         long windowStart = Environment.TickCount64;
-        int bluetooth, wifi, bytes, caughtUp, concealed, skipped, rebuffers, dropped;
+        int bluetooth, wifi, bytes, reports;
+        int caughtUp, concealed, skipped, rebuffers, dropped; // since the service started
+        int bufferedMs, targetMs;
+        double driftPpm;
+
+        public bool NativeCodec { get; set; }
+
+        public Links Links { get; set; }
 
         public void CaughtUp() => Count(ref caughtUp);
 
@@ -492,6 +536,13 @@ public sealed class ListenService : Service
                 counter++;
         }
 
+        /// <summary>From the playback thread, once per packet played.</summary>
+        public void Playing(int buffered, int target, double drift)
+        {
+            lock (counters)
+                (bufferedMs, targetMs, driftPpm) = (buffered, target, drift);
+        }
+
         public void Received(Links link, int packetBytes)
         {
             lock (counters)
@@ -501,16 +552,28 @@ public sealed class ListenService : Service
                 else
                     wifi++;
                 bytes += packetBytes + 6;
-                long elapsed = Environment.TickCount64 - windowStart;
-                if (elapsed < 5_000)
-                    return;
+            }
+        }
 
+        /// <summary>
+        /// Once a second, on a timer rather than on reception: when nothing arrives (music paused, link lost)
+        /// the screen must show 0 frames/s, not the last good figures.
+        /// </summary>
+        public void Publish()
+        {
+            lock (counters)
+            {
+                long elapsed = Math.Max(1, Environment.TickCount64 - windowStart);
                 // 50 frames/s on a link means it keeps up with real time on its own.
-                Log.Info(AuraLog.Tag, $"rx bluetooth {bluetooth * 1000.0 / elapsed:F1} + wifi {wifi * 1000.0 / elapsed:F1} frames/s, "
-                    + $"{bytes * 8.0 / elapsed:F0} kbps, caught up {caughtUp}, concealed {concealed}, skipped {skipped}, "
-                    + $"rebuffers {rebuffers}, dropped {dropped}");
+                var report = new ListenerReport(NativeCodec, Links, bluetooth * 1000.0 / elapsed, wifi * 1000.0 / elapsed,
+                    (int)(bytes * 8.0 / elapsed), bufferedMs, targetMs, driftPpm, caughtUp, concealed, skipped, rebuffers, dropped);
+                DiagnosticsHub.Publish(report);
+                if (++reports % LogEveryReports == 0)
+                    Log.Info(AuraLog.Tag, $"rx bluetooth {report.BluetoothFramesPerSecond:F0} + wifi {report.WifiFramesPerSecond:F0} frames/s, "
+                        + $"{report.Kbps} kbps, buffer {bufferedMs}/{targetMs} ms, drift {driftPpm:+0;-0} ppm, caught up {caughtUp}, "
+                        + $"concealed {concealed}, skipped {skipped}, rebuffers {rebuffers}, dropped {dropped}");
                 windowStart = Environment.TickCount64;
-                bluetooth = wifi = bytes = caughtUp = concealed = skipped = rebuffers = dropped = 0;
+                bluetooth = wifi = bytes = 0;
             }
         }
     }
@@ -518,6 +581,7 @@ public sealed class ListenService : Service
     public override void OnDestroy()
     {
         cts?.Cancel();
+        reportTimer?.Dispose();
         packets.Writer.TryComplete();
         if (focusRequest is not null)
             ((AudioManager)GetSystemService(AudioService)!).AbandonAudioFocusRequest(focusRequest);
@@ -525,6 +589,7 @@ public sealed class ListenService : Service
             UnregisterReceiver(noisyReceiver);
         if (AuraHub.Current is not Failed) // keep the error on screen
             AuraHub.Publish(new Idle());
+        DiagnosticsHub.Publish(new NoReport());
         base.OnDestroy();
     }
 

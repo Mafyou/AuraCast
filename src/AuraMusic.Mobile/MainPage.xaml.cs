@@ -11,6 +11,11 @@
             // Inside the pull-to-update ScrollView the layout would collapse: give it the visible height.
             HomeScroll.SizeChanged += (_, _) => HomeLayout.HeightRequest = HomeScroll.Height;
             LanguageButton.Text = $"🌐 {AppLanguages.Next(LanguageSettings.Current).ToUpperInvariant()}";
+            // Maximum first: a slider refuses a minimum above its current maximum of 1.
+            SyncSlider.Maximum = PlayoutTuning.MaxLatencyMs;
+            SyncSlider.Minimum = PlayoutTuning.MinLatencyMs;
+            SyncSlider.Value = PlayoutTuning.TargetLatencyMs;
+            ShowSync(PlayoutTuning.TargetLatencyMs);
             Render(AuraHub.Current);
         }
 
@@ -70,8 +75,28 @@
             bool active = state is Advertising or Streaming or Searching or Listening;
             ModeButtons.IsVisible = !active;
             ActivePanel.IsVisible = active;
+            SyncPanel.IsVisible = state is Searching or Listening;
             if (!active)
                 Spectrum.Clear();
+        }
+
+        void OnSyncChanged(object? sender, ValueChangedEventArgs e)
+        {
+            // Whole packets only: the jitter buffer counts in 20 ms steps.
+            int latency = (int)Math.Round(e.NewValue / PlayoutTuning.FrameMs) * PlayoutTuning.FrameMs;
+            if (latency == PlayoutTuning.TargetLatencyMs)
+                return;
+            PlayoutTuning.TargetLatencyMs = latency; // picked up by the playback thread on its next packet
+            Preferences.Set(App.SyncLatencyKey, PlayoutTuning.TargetLatencyMs);
+            ShowSync(PlayoutTuning.TargetLatencyMs);
+        }
+
+        void ShowSync(int latency) => SyncLabel.Text = Format(AppStrings.SyncDelay, latency);
+
+        async void OnArtworkDoubleTapped(object? sender, TappedEventArgs e)
+        {
+            if (Navigation.ModalStack.Count == 0)
+                await Navigation.PushModalAsync(new DiagnosticsPage());
         }
 
         async void OnBroadcastClicked(object? sender, EventArgs e) => await RunAsync(AuraController.StartBroadcastAsync);

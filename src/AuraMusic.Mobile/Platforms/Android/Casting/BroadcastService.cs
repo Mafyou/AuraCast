@@ -18,6 +18,8 @@ public sealed class BroadcastService : Service
     Thread? captureThread;
 
     const int FrameLength = AuraProtocol.FrameSamples * AuraProtocol.Channels;
+    const int FramesPerSecond = AuraProtocol.SampleRate / AuraProtocol.FrameSamples;
+    volatile bool nativeEncoder;
 
     // Captured frames are rented, not allocated: 50 fresh arrays a second kept the GC busy, and on Android
     // every .NET collection also stops the Java side, audio threads included.
@@ -250,6 +252,9 @@ public sealed class BroadcastService : Service
                 anyListener = listeners.Count > 0;
             if (!anyListener || !toEncode.Writer.TryWrite(pcm))
                 FramePool.Return(pcm);
+            // Nothing is encoded while nobody listens: once a second, clear the links the last report still shows.
+            if (!anyListener && captured % FramesPerSecond == 0)
+                DiagnosticsHub.Publish(new MasterReport(nativeEncoder, AuraProtocol.Bitrate / 1000, 0, 0, []));
         }
         toEncode.Writer.TryComplete();
     }
@@ -261,6 +266,7 @@ public sealed class BroadcastService : Service
     async Task EncodeLoop(CancellationToken stoppingToken)
     {
         using var encoder = OpusCodec.CreateEncoder(AuraProtocol.SampleRate, AuraProtocol.Channels, AuraProtocol.Bitrate);
+        nativeEncoder = encoder.IsNative;
         Log.Info(AuraLog.Tag, encoder.IsNative ? "encoder: libopus" : "encoder: managed fallback (libopus did not load)");
 
         var packet = new byte[AuraProtocol.MaxPacketSize];
@@ -269,8 +275,9 @@ public sealed class BroadcastService : Service
         ListenerLink[] targets = [];
         var statuses = new LinkStatus[4];
         var carries = new bool[4];
-        long windowStart = Environment.TickCount64;
+        long windowStart = Environment.TickCount64, reportStart = windowStart;
         var encoding = TimeSpan.Zero;
+        var lastEncode = TimeSpan.Zero;
         int frames = 0;
         await foreach (var pcm in toEncode.Reader.ReadAllAsync(stoppingToken))
         {
@@ -289,13 +296,25 @@ public sealed class BroadcastService : Service
 
             long started = Stopwatch.GetTimestamp();
             int length = encoder.Encode(pcm.AsSpan(0, FrameLength), AuraProtocol.FrameSamples, packet);
-            encoding += Stopwatch.GetElapsedTime(started);
+            lastEncode = Stopwatch.GetElapsedTime(started);
+            encoding += lastEncode;
             FramePool.Return(pcm);
 
             var frame = new EncodedFrame(sequence++, packet.AsSpan(0, length).ToArray());
             for (int i = 0; i < targets.Length; i++)
                 if (carries[i]) // a Bluetooth link idles behind its phone's healthy Wi-Fi link
                     targets[i].Enqueue(frame);
+
+            // Once a second, for the diagnostics screen.
+            long sinceReport = Environment.TickCount64 - reportStart;
+            if (sinceReport >= 1_000)
+            {
+                var links = ImmutableArray.CreateBuilder<LinkReport>(targets.Length);
+                for (int i = 0; i < targets.Length; i++)
+                    links.Add(targets[i].Report(sinceReport / 1000.0, carries[i]));
+                DiagnosticsHub.Publish(new MasterReport(encoder.IsNative, bitrate / 1000, lastEncode.TotalMilliseconds, toEncode.Reader.Count, links.MoveToImmutable()));
+                reportStart = Environment.TickCount64;
+            }
 
             if (++frames > 0 && Environment.TickCount64 - windowStart >= 5_000)
             {
@@ -329,6 +348,7 @@ public sealed class BroadcastService : Service
 
         if (AuraHub.Current is not Failed) // keep the error on screen
             AuraHub.Publish(new Idle());
+        DiagnosticsHub.Publish(new NoReport());
         base.OnDestroy();
     }
 

@@ -32,8 +32,10 @@ L'écran peut être éteint des deux côtés. La notification permet d'arrêter.
 - **Confiance** : un téléphone n'est accepté en Wi-Fi que s'il s'est déjà connecté en Bluetooth, donc appairé (`TrustedDevices`). Personne d'autre sur le réseau ne peut écouter.
 - **Liens morts** : le master envoie un signal de vie chaque seconde quand il n'y a pas de son ; un lien muet 5 s est fermé et se reconnecte.
 - **Protocole** (v3) : le master envoie un en-tête `AURA` + version + identifiant de session, l'auditeur répond par un « hello » (identifiant du téléphone + nom), puis viennent des paquets Opus préfixés par leur longueur et leur numéro, et des trames vides en signal de vie (`src/AuraMusic.Kernel/Protocol/AuraProtocol.cs`).
-- **Lecture** : le décodage suit l'horloge de lecture. Un paquet en retard est comblé par la dissimulation de pertes d'Opus et le retard accumulé est rattrapé en sautant une trame.
 - **Lecture** : thread en priorité audio Android, sortie en virgule flottante. Un paquet en retard n'est comblé (dissimulation d'Opus) que si la sortie audio va manquer de son ; un retard accumulé est rattrapé en raccourcissant les trames de 1 ms avec un fondu, sans clic.
+- **Dérive d'horloge** : les quartz des deux téléphones ne battent pas exactement à la même vitesse. `DriftController` surveille le son en attente et ajuste la vitesse de lecture d'au plus ±0,3 % (inaudible) pour le garder sur la cible, au lieu de laisser le tampon se vider ou déborder au fil des minutes.
+- **Curseur de synchro** : pendant l'écoute, un curseur règle le délai total de 80 à 500 ms (200 par défaut). À gauche, le son colle à celui du master (même pièce) ; à droite, il encaisse mieux les à-coups radio. Le réglage s'applique en direct et est mémorisé (`PlayoutTuning`).
+- **Diagnostic** : un double appui sur l'image de l'accueil ouvre un écran de chiffres en direct (codec, débit, trames par seconde de chaque lien, tampon, dérive, pertes), fourni par `DiagnosticsHub`.
 - **Plusieurs auditeurs** : chaque connexion a sa propre file d'envoi. À 96 kbps, la liaison garde de la marge pour plusieurs téléphones (le Bluetooth classique accepte au plus 7 appareils connectés au master).
 - **Spectre** : pendant la diffusion ou l'écoute, 16 bandes de fréquences façon Matrix (FFT maison dans le Kernel).
 - **Mises à jour** : au lancement, l'app compare sa version à la dernière release GitHub et propose d'installer la nouvelle (même clé de signature : installation par-dessus, réglages conservés).
@@ -45,7 +47,8 @@ L'écran peut être éteint des deux côtés. La notification permet d'arrêter.
 - `src/AuraMusic.Kernel` : la logique sans dépendance Android, testable.
   - `State/` : l'état de l'app, une union `AuraState` publiée par `AuraHub` ;
   - `Protocol/` : le format des données échangées ;
-  - `Playout/` : `PlayoutController`, qui décide toutes les 20 ms de jouer, rattraper, combler, sauter ou rebufferiser (une union `PlayoutStep`), et `PcmCrossfade` ;
+  - `Playout/` : `PlayoutController`, qui décide toutes les 20 ms de jouer, rattraper, combler, sauter ou rebufferiser (une union `PlayoutStep`), `PcmCrossfade`, `DriftController` (dérive d'horloge) et `PlayoutTuning` (délai choisi au curseur) ;
+  - `Diagnostics/` : les relevés du master et de l'écoute (une union `DiagnosticsReport`) et leur mise en texte ;
   - `Spectrum/` : l'analyseur de spectre ;
   - `Updates/` : lecture de la dernière release GitHub et comparaison des versions (une union `UpdateCheck`) ;
   - `Codec/` : encodeur et décodeur Opus (`OpusCodec`, natif ou C#) ;
@@ -54,6 +57,7 @@ L'écran peut être éteint des deux côtés. La notification permet d'arrêter.
 - `src/AuraMusic.Mobile` : l'app. Code Android dans `Platforms/Android/Casting/` (`BroadcastService` côté master, `ListenService` côté écoute).
 - `tests/AuraMusic.Kernel.Tests` : tests unitaires xUnit v3 + Shouldly + Moq.
 - Chaque projet regroupe ses `global using` dans un `Usings.cs` à sa racine.
+- Apparence : toutes les couleurs sont dans `Resources/Styles/Colors.xaml`, tous les styles de composants dans `Resources/Styles/Styles.xaml` ; le code C# les lit par `Theme.Color` / `Theme.Style`.
 
 ```sh
 dotnet test --project tests/AuraMusic.Kernel.Tests

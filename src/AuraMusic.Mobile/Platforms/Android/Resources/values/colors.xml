@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Android's own theme cannot read Resources/Styles/Colors.xaml: MatrixBackground and MatrixGreen, repeated by hand. -->
 <resources>
-    <color name="colorPrimary">#512BD4</color>
-    <color name="colorPrimaryDark">#2B0B98</color>
-    <color name="colorAccent">#2B0B98</color>
+    <color name="colorPrimary">#000C08</color>
+    <color name="colorPrimaryDark">#000C08</color>
+    <color name="colorAccent">#00FF66</color>
 </resources>

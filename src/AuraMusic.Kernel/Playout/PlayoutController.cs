@@ -9,7 +9,7 @@ public sealed class PlayoutController(IPlayoutMetrics metrics)
     public int PrebufferFrames
     {
         get;
-        init => field = value > 0 ? value : throw new ArgumentOutOfRangeException(nameof(PrebufferFrames), value, "Must be positive.");
+        set => field = value > 0 ? value : throw new ArgumentOutOfRangeException(nameof(PrebufferFrames), value, "Must be positive.");
     } = 10;
 
     /// <summary>
@@ -19,7 +19,7 @@ public sealed class PlayoutController(IPlayoutMetrics metrics)
     public int CatchUpAboveFrames
     {
         get;
-        init => field = value >= 0 ? value : throw new ArgumentOutOfRangeException(nameof(CatchUpAboveFrames), value, "Cannot be negative.");
+        set => field = value >= 0 ? value : throw new ArgumentOutOfRangeException(nameof(CatchUpAboveFrames), value, "Cannot be negative.");
     } = 16;
 
     /// <summary>
@@ -29,14 +29,14 @@ public sealed class PlayoutController(IPlayoutMetrics metrics)
     public int CatchUpEveryFrames
     {
         get;
-        init => field = value > 0 ? value : throw new ArgumentOutOfRangeException(nameof(CatchUpEveryFrames), value, "Must be positive.");
+        set => field = value > 0 ? value : throw new ArgumentOutOfRangeException(nameof(CatchUpEveryFrames), value, "Must be positive.");
     } = 5;
 
     /// <summary>Last resort, far behind (the link stalled then burst): a packet is dropped outright.</summary>
     public int MaxBacklogFrames
     {
         get;
-        init => field = value >= 0 ? value : throw new ArgumentOutOfRangeException(nameof(MaxBacklogFrames), value, "Cannot be negative.");
+        set => field = value >= 0 ? value : throw new ArgumentOutOfRangeException(nameof(MaxBacklogFrames), value, "Cannot be negative.");
     } = 30;
 
     /// <summary>
@@ -46,8 +46,19 @@ public sealed class PlayoutController(IPlayoutMetrics metrics)
     public int MaxConcealedFrames
     {
         get;
-        init => field = value >= 0 ? value : throw new ArgumentOutOfRangeException(nameof(MaxConcealedFrames), value, "Cannot be negative.");
+        set => field = value >= 0 ? value : throw new ArgumentOutOfRangeException(nameof(MaxConcealedFrames), value, "Cannot be negative.");
     } = 4;
+
+    /// <summary>
+    /// Retargets the jitter buffer while playing (the sync slider): how many packets to keep in hand, with the
+    /// catch-up and last-resort thresholds following at their usual distance above.
+    /// </summary>
+    public void SetCushion(int prebufferFrames)
+    {
+        PrebufferFrames = prebufferFrames;
+        CatchUpAboveFrames = prebufferFrames + PlayoutTuning.CatchUpMarginFrames;
+        MaxBacklogFrames = prebufferFrames + PlayoutTuning.SkipMarginFrames;
+    }
 
     int concealedInARow;
     int sinceCatchUp = int.MaxValue / 2;

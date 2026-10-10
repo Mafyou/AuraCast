@@ -5,8 +5,13 @@
         public App()
         {
             LanguageSettings.Apply();
+            // The sync slider's last position, before any listening starts.
+            PlayoutTuning.TargetLatencyMs = Preferences.Get(SyncLatencyKey, PlayoutTuning.DefaultLatencyMs);
             InitializeComponent();
         }
+
+        /// <summary>Where the listener's chosen delay is kept between launches.</summary>
+        public const string SyncLatencyKey = "syncLatencyMs";
 
         protected override void OnResume()
         {

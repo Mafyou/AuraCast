@@ -1,7 +1,9 @@
+global using System.Collections.Immutable;
 global using System.Globalization;
 global using System.Net;
 global using System.Text;
 global using AuraMusic.Kernel.Codec;
+global using AuraMusic.Kernel.Diagnostics;
 global using AuraMusic.Kernel.Localization;
 global using AuraMusic.Kernel.Multipath;
 global using AuraMusic.Kernel.Playout;

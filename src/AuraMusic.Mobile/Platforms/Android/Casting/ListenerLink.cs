@@ -22,6 +22,7 @@ sealed class ListenerLink(Stream input, Stream output, Links kind, Action close)
     Hello? hello;
     long readyAt;
     int dropped;
+    int sentTotal, sentReported;
 
     public Links Kind => kind;
 
@@ -46,6 +47,14 @@ sealed class ListenerLink(Stream input, Stream output, Links kind, Action close)
         hello = AuraProtocol.ReadHello(input);
         readyAt = Environment.TickCount64;
         return hello;
+    }
+
+    /// <summary>For the diagnostics screen: what this link sent since the previous call.</summary>
+    public LinkReport Report(double seconds, bool carrying)
+    {
+        int total = Volatile.Read(ref sentTotal);
+        int sent = total - Interlocked.Exchange(ref sentReported, total);
+        return new LinkReport(Name, kind, sent / seconds, queue.Reader.Count, carrying);
     }
 
     public void Enqueue(EncodedFrame frame)
@@ -86,6 +95,7 @@ sealed class ListenerLink(Stream input, Stream output, Links kind, Action close)
             {
                 AuraProtocol.WriteFrame(batch, frame.Sequence, frame.Packet);
                 sent++;
+                Interlocked.Increment(ref sentTotal);
             }
             long writeStart = Stopwatch.GetTimestamp();
             output.Write(batch.GetBuffer(), 0, (int)batch.Length);

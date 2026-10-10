@@ -9,6 +9,13 @@
   <data name="BroadcastButton" xml:space="preserve"><value>&gt; SHARE MY SOUND</value></data>
   <data name="ListenButton" xml:space="preserve"><value>&gt; LISTEN</value></data>
   <data name="StopButton" xml:space="preserve"><value>■ STOP</value></data>
+  <data name="SyncDescription" xml:space="preserve"><value>Sync setting</value></data>
+  <data name="SyncCloser" xml:space="preserve"><value>closer</value></data>
+  <data name="SyncSteadier" xml:space="preserve"><value>steadier</value></data>
+  <data name="SyncDelay" xml:space="preserve"><value>delay {0} ms</value></data>
+  <data name="DiagnosticsTitle" xml:space="preserve"><value>Diagnostics</value></data>
+  <data name="DiagnosticsClose" xml:space="preserve"><value>&gt; CLOSE</value></data>
+  <data name="DiagnosticsIdle" xml:space="preserve"><value>Nothing running: start sharing or listening to see the figures.</value></data>
   <data name="StatusIdle" xml:space="preserve"><value>&gt; what do you want to do?</value></data>
   <data name="HintIdle" xml:space="preserve"><value>Share your music, or listen to a phone nearby.</value></data>
   <data name="StatusAdvertising" xml:space="preserve"><value>&gt; signal on air_</value></data>

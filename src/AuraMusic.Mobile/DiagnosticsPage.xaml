@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:AuraMusic.Mobile.Controls"
+             xmlns:strings="clr-namespace:AuraMusic.Mobile.Resources.Strings"
+             x:Class="AuraMusic.Mobile.DiagnosticsPage">
+
+    <Grid>
+        <controls:MatrixRainView Opacity="0.2" />
+
+        <Grid RowDefinitions="Auto,*,Auto" Padding="20,28,20,28" RowSpacing="16">
+
+            <Label Text="{x:Static strings:AppStrings.DiagnosticsTitle}"
+                   Style="{StaticResource MatrixSubtitle}"
+                   SemanticProperties.HeadingLevel="Level1" />
+
+            <!-- Live figures, refreshed about once a second: a screenshot of this is all it takes to report a problem. -->
+            <Border Grid.Row="1" Style="{StaticResource MatrixPanelBorder}">
+                <ScrollView>
+                    <Label x:Name="Report" Style="{StaticResource MatrixMono}" />
+                </ScrollView>
+            </Border>
+
+            <Button Grid.Row="2"
+                    Text="{x:Static strings:AppStrings.DiagnosticsClose}"
+                    Style="{StaticResource MatrixButton}"
+                    Clicked="OnCloseClicked" />
+        </Grid>
+    </Grid>
+
+</ContentPage>
