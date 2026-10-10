@@ -87,7 +87,7 @@ adb logcat -s AuraMusic
 
 ### Intégration continue
 
-`main` est protégée : tout passe par une pull request. Sur chacune, [le workflow de vérification](.github/workflows/pr.yml) lance les tests du Kernel et compile l'app Android en Release, **warnings traités comme des erreurs** ; les deux doivent être au vert pour fusionner. Il vérifie aussi que la version du csproj a été montée : une pull request qui la laisse sur un numéro déjà publié est refusée.
+`main` est protégée : tout passe par une pull request. Sur chacune, [le workflow de vérification](.github/workflows/pr.yml) lance les tests du Kernel et compile l'app Android en Release, **warnings traités comme des erreurs** ; les deux doivent être au vert pour fusionner. Il vérifie aussi que la version du csproj a été montée : une pull request est refusée si son numéro n'est pas strictement supérieur à celui de `main`, ou s'il est déjà publié.
 
 ### Release
 
