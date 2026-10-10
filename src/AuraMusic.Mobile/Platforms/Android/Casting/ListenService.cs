@@ -11,7 +11,7 @@ public sealed class ListenService : Service
     // Jitter buffer capacity, in 20 ms Opus packets; the playout policy lives in PlayoutController.
     // Room for the largest cushion (slider at its maximum plus what AdaptiveLatency adds) and the burst that
     // follows a Bluetooth stall: a smaller channel drops those packets.
-    const int MaxBufferedFrames = 64;
+    const int MaxBufferedFrames = 96;
     // Most of the cushion sits in the AudioTrack, not in the channel: a late packet is waited for until the
     // AudioTrack is about to run dry, and only then concealed.
     const int LowWaterFrames = AuraProtocol.SampleRate / 50; // 20 ms
@@ -34,6 +34,10 @@ public sealed class ListenService : Service
 
     // The playback rate is only touched for a real change: each call crosses into the audio system.
     const int MinRateStepHz = 2;
+
+    // After a stall: how often to look whether the link has finished pouring out its backlog, and for how long.
+    const int SettleStepMs = 60;
+    const int SettleLimitMs = 900;
 
     // Spectrum levels waiting for their audio to be played; bounded in case the AudioTrack stalls.
     const int MaxPendingLevels = 50;
@@ -411,19 +415,43 @@ public sealed class ListenService : Service
         var pendingLevels = new Queue<(uint PlayedAt, float[] Levels)>();
         uint written = 0; // sample frames handed to the AudioTrack; wraps like its playback head
         float volume = 1;
+        long dryAt = 0; // when playback ran out of packets, until it has some again
+
+        void Retarget()
+        {
+            int wanted = PlayoutTuning.LatencyFor(stats.Links) + adaptive.ExtraMs;
+            if (wanted == latency)
+                return;
+            latency = wanted; // the sync slider moved, Wi-Fi came or went, or the link needs more in hand
+            reachable = PlayoutTuning.ReachableLatencyMs(latency, outputMs);
+            playout.SetCushion(PlayoutTuning.CushionFrames(latency, outputMs));
+            drift.TargetMs = reachable;
+        }
+
         track.Play();
         try
         {
             Prebuffer(packets, playout.PrebufferFrames, stoppingToken);
             while (!packets.Completion.IsCompleted && !stoppingToken.IsCancellationRequested)
             {
-                if (PlayoutTuning.LatencyFor(stats.Links) + adaptive.ExtraMs is var wanted && wanted != latency)
+                if (dryAt != 0 && packets.Count > 0)
                 {
-                    latency = wanted; // the sync slider moved, Wi-Fi came or went, or the link needs more in hand
-                    reachable = PlayoutTuning.ReachableLatencyMs(latency, outputMs);
-                    playout.SetCushion(PlayoutTuning.CushionFrames(latency, outputMs));
-                    drift.TargetMs = reachable;
+                    // Back after a stall. The sound is cut anyway, so this is the moment to put things right
+                    // without it being heard: keep what the stall showed was missing, wait for that much to be
+                    // in hand, let the link finish pouring out what it held back, and drop what exceeds the
+                    // cushion (decoded, to keep the codec in step) rather than play late and shorten packets
+                    // for the next half minute.
+                    adaptive.Stalled(Stopwatch.GetElapsedTime(dryAt));
+                    dryAt = 0;
+                    Retarget();
+                    Prebuffer(packets, playout.PrebufferFrames, stoppingToken);
+                    Settle(packets, stoppingToken);
+                    while (packets.Count > playout.PrebufferFrames && packets.TryRead(out var stale))
+                        decoder.Decode(stale, pcm, AuraProtocol.FrameSamples);
+                    playout.Resynced();
+                    drift.Restart();
                 }
+                Retarget();
 
                 if (!packets.TryRead(out var packet))
                     packet = WaitForLatePacket(packets, track, written, stoppingToken);
@@ -443,22 +471,15 @@ public sealed class ListenService : Service
                     case Conceal:
                         decoder.Decode(ReadOnlySpan<byte>.Empty, pcm, AuraProtocol.FrameSamples);
                         drift.RanDry(); // nothing left to play: certainly not the moment to play faster
-                        adaptive.RanDry();
+                        if (dryAt == 0)
+                            dryAt = Stopwatch.GetTimestamp();
                         break;
                     case Skip(var data):
                         decoder.Decode(data, pcm, AuraProtocol.FrameSamples);
                         continue;
                     case Rebuffer:
                         stats.Playing(0, reachable, 0, track.UnderrunCount); // ran dry: say so rather than leave the last good figures on screen
-                        long waitStart = Stopwatch.GetTimestamp();
-                        Prebuffer(packets, playout.PrebufferFrames, stoppingToken);
-                        adaptive.Rebuffered(Stopwatch.GetElapsedTime(waitStart));
-                        // The stall ends in a burst holding more than the cushion. The sound has stopped anyway:
-                        // this is the one moment where dropping the excess is not heard, instead of playing
-                        // late and shortening packets for the next half minute. Decoded, to keep the codec in step.
-                        while (packets.Count > playout.PrebufferFrames && packets.TryRead(out var stale))
-                            decoder.Decode(stale, pcm, AuraProtocol.FrameSamples);
-                        drift.Restart();
+                        Prebuffer(packets, 1, stoppingToken); // silent until the link delivers again
                         continue;
                 }
 
@@ -512,6 +533,21 @@ public sealed class ListenService : Service
                 return packet;
         }
         return null;
+    }
+
+    /// <summary>
+    /// After a stall a link pours out what it held back, faster than real time, for a second or so: waits until
+    /// packets are back to arriving at their normal pace, so that the excess can be measured once and for all.
+    /// </summary>
+    static void Settle(ChannelReader<byte[]> packets, CancellationToken stoppingToken)
+    {
+        for (int waited = 0; waited < SettleLimitMs && !stoppingToken.IsCancellationRequested; waited += SettleStepMs)
+        {
+            int before = packets.Count;
+            Thread.Sleep(SettleStepMs);
+            if (packets.Count - before <= SettleStepMs / PlayoutTuning.FrameMs + 1)
+                return;
+        }
     }
 
     static void Prebuffer(ChannelReader<byte[]> packets, int frames, CancellationToken stoppingToken)

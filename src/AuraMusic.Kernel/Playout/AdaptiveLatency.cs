@@ -1,15 +1,15 @@
 namespace AuraMusic.Kernel.Playout;
 
 /// <summary>
-/// Learns how much more audio this link needs in hand. Each time playback runs dry the latency is raised a
-/// step, so the next stall of that size is ridden out silently instead of being concealed, then caught up on;
-/// after a long calm it comes back down, slowly. A radio that stalls every few seconds settles on what it
-/// takes; a clean link stays at the chosen latency.
+/// Learns how much more audio this link needs in hand. When playback runs dry, the latency is raised by how
+/// long it stayed dry, so the next stall of that size is ridden out silently instead of being concealed, then
+/// caught up on; after a long calm it comes back down, slowly. A radio that stalls every few seconds settles
+/// on what it takes; a clean link stays at the chosen latency.
 /// </summary>
 public sealed class AdaptiveLatency
 {
-    /// <summary>Added when playback runs dry: about what a short concealment covers.</summary>
-    public const int StepMs = 60;
+    /// <summary>Added on top of the time playback stayed dry, so a stall of the same length just fits.</summary>
+    public const int MarginMs = 40;
 
     /// <summary>The most that is ever added to the chosen latency.</summary>
     public const int MaxExtraMs = 400;
@@ -21,8 +21,6 @@ public sealed class AdaptiveLatency
     public static readonly TimeSpan Outage = TimeSpan.FromSeconds(2);
 
     int calmFrames;
-    int addedThisRun;
-    bool dry;
 
     /// <summary>Milliseconds to add to the chosen latency.</summary>
     public int ExtraMs { get; private set; }
@@ -30,42 +28,20 @@ public sealed class AdaptiveLatency
     /// <summary>A packet was there in time and played.</summary>
     public void Played()
     {
-        dry = false;
-        addedThisRun = 0;
         if (++calmFrames < CalmFramesPerStepDown)
             return;
         calmFrames = 0;
         ExtraMs = Math.Max(0, ExtraMs - PlayoutTuning.FrameMs);
     }
 
-    /// <summary>Nothing to play, a packet is being concealed. Counts once per run of missing packets.</summary>
-    public void RanDry()
+    /// <summary>Playback is back after having had nothing to play for <paramref name="dry"/>.</summary>
+    public void Stalled(TimeSpan dry)
     {
         calmFrames = 0;
-        if (dry)
+        if (dry > Outage)
             return;
-        dry = true;
-        Raise();
-    }
-
-    /// <summary>Playback had to stop and wait <paramref name="waited"/> for the buffer to fill again.</summary>
-    public void Rebuffered(TimeSpan waited)
-    {
-        calmFrames = 0;
-        if (waited > Outage)
-        {
-            // Not jitter: take back what this run added.
-            ExtraMs -= addedThisRun;
-            addedThisRun = 0;
-            return;
-        }
-        Raise(); // concealing was not enough: this stall was a long one
-    }
-
-    void Raise()
-    {
-        int step = Math.Min(StepMs, MaxExtraMs - ExtraMs);
-        ExtraMs += step;
-        addedThisRun += step;
+        // In whole packets, as the jitter buffer counts.
+        int missing = (int)Math.Ceiling((dry.TotalMilliseconds + MarginMs) / PlayoutTuning.FrameMs) * PlayoutTuning.FrameMs;
+        ExtraMs = Math.Min(MaxExtraMs, ExtraMs + missing);
     }
 }

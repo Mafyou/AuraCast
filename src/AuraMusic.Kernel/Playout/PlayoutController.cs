@@ -64,6 +64,9 @@ public sealed class PlayoutController(IPlayoutMetrics metrics)
     // The backlog jumps by a whole burst when one arrives: follow its trend (about a second), not that.
     const double BacklogSmoothing = 0.02;
 
+    /// <summary>The buffer was just brought back to its cushion by hand (after a stall): judge the backlog afresh.</summary>
+    public void Resynced() => trendPrimed = false;
+
     int concealedInARow;
     int sinceCatchUp = int.MaxValue / 2;
     double backlogTrend;

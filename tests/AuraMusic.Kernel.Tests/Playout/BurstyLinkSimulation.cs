@@ -13,6 +13,11 @@ sealed class BurstyLinkSimulation : IPlayoutMetrics
     const double GraceMs = PlayoutTuning.OutputShareMs - 20;
     // The master keeps this many packets for a link that does not take them; older ones are lost.
     const int MasterQueueFrames = 50;
+    // After a stall the link pours out what it held back at about twice real time, as measured on phones.
+    const double FlushMsPerPacket = FrameMs / 2;
+    const int StallFrames = 15; // a burst this long is a stall, flushed progressively
+    const double SettleStepMs = 60;
+    const int SettleSteps = 15;
 
     readonly PlayoutController playout;
     readonly DriftController drift = new(48_000);
@@ -21,7 +26,7 @@ sealed class BurstyLinkSimulation : IPlayoutMetrics
     readonly Func<int> nextBurst;
     readonly List<double> arrivals = []; // arrivals[k]: when the k-th packet that gets through reaches the listener
     int produced, consumed, latencyMs;
-    double now;
+    double now, dryAt = -1;
 
     public BurstyLinkSimulation(int latencyMs, Func<int> nextBurst)
     {
@@ -39,7 +44,10 @@ sealed class BurstyLinkSimulation : IPlayoutMetrics
 
     public int RebufferCount { get; private set; }
 
-    /// <summary>Packets thrown away to get back in step after a rebuffer.</summary>
+    /// <summary>Times the sound was cut: playback ran dry, whether concealed for a moment or not.</summary>
+    public int CutCount { get; private set; }
+
+    /// <summary>Packets thrown away to get back in step after a cut.</summary>
     public int ResyncedCount { get; private set; }
 
     public double Correction => drift.Correction;
@@ -74,8 +82,13 @@ sealed class BurstyLinkSimulation : IPlayoutMetrics
         {
             int burst = nextBurst();
             produced += burst;
-            for (int i = 0; i < Math.Min(burst, MasterQueueFrames); i++)
-                arrivals.Add(produced * FrameMs);
+            double arrival = produced * FrameMs;
+            int delivered = Math.Min(burst, MasterQueueFrames);
+            for (int i = 0; i < delivered; i++)
+            {
+                double at = burst >= StallFrames ? arrival + i * FlushMsPerPacket : arrival;
+                arrivals.Add(arrivals.Count > 0 ? Math.Max(at, arrivals[^1]) : at);
+            }
         }
     }
 
@@ -100,32 +113,33 @@ sealed class BurstyLinkSimulation : IPlayoutMetrics
         double end = now + duration.TotalMilliseconds;
         while (now < end)
         {
-            Retarget();
             int available = Delivered() - consumed;
+            if (dryAt >= 0 && available > 0)
+            {
+                Recover();
+                continue;
+            }
+            Retarget();
+
             if (available == 0)
             {
                 DeliverUntil(consumed);
-                if (arrivals[consumed] - now <= GraceMs)
+                if (dryAt < 0 && arrivals[consumed] - now <= GraceMs)
                 {
                     now = arrivals[consumed];
                     continue;
                 }
                 if (playout.Next(null, 0) is Rebuffer)
                 {
-                    double waitStart = now;
-                    WaitFor(playout.PrebufferFrames);
-                    adaptive.Rebuffered(TimeSpan.FromMilliseconds(now - waitStart));
-                    int excess = Delivered() - consumed - playout.PrebufferFrames;
-                    if (excess > 0)
-                    {
-                        consumed += excess;
-                        ResyncedCount += excess;
-                    }
-                    drift.Restart();
+                    WaitFor(1); // silent until the link delivers again
                     continue;
                 }
                 drift.RanDry();
-                adaptive.RanDry();
+                if (dryAt < 0)
+                {
+                    dryAt = now;
+                    CutCount++;
+                }
                 Play(FrameMs);
                 continue;
             }
@@ -145,6 +159,30 @@ sealed class BurstyLinkSimulation : IPlayoutMetrics
                     break;
             }
         }
+    }
+
+    /// <summary>Back after a stall: learn from it, refill, let the link settle, drop the excess.</summary>
+    void Recover()
+    {
+        adaptive.Stalled(TimeSpan.FromMilliseconds(now - dryAt));
+        dryAt = -1;
+        Retarget();
+        WaitFor(playout.PrebufferFrames);
+        for (int step = 0; step < SettleSteps; step++)
+        {
+            int before = Delivered();
+            now += SettleStepMs;
+            if (Delivered() - before <= SettleStepMs / FrameMs + 1)
+                break;
+        }
+        int excess = Delivered() - consumed - playout.PrebufferFrames;
+        if (excess > 0)
+        {
+            consumed += excess;
+            ResyncedCount += excess;
+        }
+        playout.Resynced();
+        drift.Restart();
     }
 
     void Play(double audioMs)

@@ -2,13 +2,13 @@ namespace AuraMusic.Kernel.Tests.Playout;
 
 public sealed class AdaptiveLatencyTests
 {
-    static readonly TimeSpan ShortWait = TimeSpan.FromMilliseconds(300);
-
     static void Play(AdaptiveLatency latency, int frames)
     {
         for (int i = 0; i < frames; i++)
             latency.Played();
     }
+
+    static TimeSpan Ms(int milliseconds) => TimeSpan.FromMilliseconds(milliseconds);
 
     [Fact]
     public void CleanLink_AddsNothing()
@@ -20,52 +20,41 @@ public sealed class AdaptiveLatencyTests
         latency.ExtraMs.ShouldBe(0);
     }
 
-    [Fact]
-    public void RunningDry_RaisesTheLatencyOnce_HoweverManyPacketsAreMissing()
+    [Theory]
+    [InlineData(1, 60)]    // even the shortest dry spell: its margin, in whole packets
+    [InlineData(100, 140)]
+    [InlineData(130, 180)] // 170 ms rounded up to whole packets
+    [InlineData(300, 340)]
+    public void Stall_RaisesTheLatencyByHowLongPlaybackStayedDry(int dryMs, int expectedExtraMs)
     {
         var latency = new AdaptiveLatency();
 
-        latency.RanDry();
-        latency.RanDry();
-        latency.RanDry();
+        latency.Stalled(Ms(dryMs));
 
-        latency.ExtraMs.ShouldBe(AdaptiveLatency.StepMs);
+        latency.ExtraMs.ShouldBe(expectedExtraMs);
     }
 
     [Fact]
-    public void EachNewDryRun_RaisesItAgain()
+    public void EachStall_AddsToThePreviousOnes()
     {
         var latency = new AdaptiveLatency();
 
-        latency.RanDry();
+        latency.Stalled(Ms(100));
         Play(latency, 10);
-        latency.RanDry();
+        latency.Stalled(Ms(20));
 
-        latency.ExtraMs.ShouldBe(2 * AdaptiveLatency.StepMs);
+        latency.ExtraMs.ShouldBe(140 + 60);
     }
 
     [Fact]
-    public void Rebuffer_AfterAShortWait_RaisesItFurther()
+    public void Outage_IsNotLearntFrom()
     {
         var latency = new AdaptiveLatency();
+        latency.Stalled(Ms(100));
 
-        latency.RanDry();
-        latency.Rebuffered(ShortWait);
+        latency.Stalled(AdaptiveLatency.Outage + Ms(1)); // the broadcast stopped, then came back
 
-        latency.ExtraMs.ShouldBe(2 * AdaptiveLatency.StepMs);
-    }
-
-    [Fact]
-    public void Rebuffer_AfterAnOutage_TakesBackWhatThatRunAdded()
-    {
-        var latency = new AdaptiveLatency();
-        latency.RanDry();
-        Play(latency, 10);
-
-        latency.RanDry(); // the broadcast stops...
-        latency.Rebuffered(AdaptiveLatency.Outage + TimeSpan.FromSeconds(1)); // ...and comes back later
-
-        latency.ExtraMs.ShouldBe(AdaptiveLatency.StepMs);
+        latency.ExtraMs.ShouldBe(140);
     }
 
     [Fact]
@@ -73,12 +62,8 @@ public sealed class AdaptiveLatencyTests
     {
         var latency = new AdaptiveLatency();
 
-        for (int i = 0; i < 50; i++)
-        {
-            latency.RanDry();
-            latency.Rebuffered(ShortWait);
-            Play(latency, 10);
-        }
+        for (int i = 0; i < 10; i++)
+            latency.Stalled(Ms(300));
 
         latency.ExtraMs.ShouldBe(AdaptiveLatency.MaxExtraMs);
     }
@@ -87,25 +72,25 @@ public sealed class AdaptiveLatencyTests
     public void LongCalm_GivesItBackOnePacketAtATime()
     {
         var latency = new AdaptiveLatency();
-        latency.RanDry();
+        latency.Stalled(Ms(1));
 
         Play(latency, AdaptiveLatency.CalmFramesPerStepDown);
-        latency.ExtraMs.ShouldBe(AdaptiveLatency.StepMs - PlayoutTuning.FrameMs);
+        latency.ExtraMs.ShouldBe(60 - PlayoutTuning.FrameMs);
 
         Play(latency, 10 * AdaptiveLatency.CalmFramesPerStepDown);
         latency.ExtraMs.ShouldBe(0);
     }
 
     [Fact]
-    public void RunningDry_RestartsTheCalmPeriod()
+    public void Stall_RestartsTheCalmPeriod()
     {
         var latency = new AdaptiveLatency();
-        latency.RanDry();
+        latency.Stalled(Ms(1));
         Play(latency, AdaptiveLatency.CalmFramesPerStepDown - 1);
 
-        latency.RanDry();
+        latency.Stalled(Ms(1));
         Play(latency, AdaptiveLatency.CalmFramesPerStepDown - 1);
 
-        latency.ExtraMs.ShouldBe(2 * AdaptiveLatency.StepMs);
+        latency.ExtraMs.ShouldBe(120);
     }
 }
